@@ -14,7 +14,7 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const UNGROUPED_ID = '__ungrouped';
 
 const DEFAULTS = {
