@@ -20,6 +20,7 @@ const UNGROUPED_ID = '__ungrouped';
 const DEFAULTS = {
     compactActions: true, // fold Manage/Install into the ⋯ menu
     showSearch: true,
+    hideBuiltins: false, // hide the built-in Assets drawer and the deprecated Extras API block
     theme: 'auto', // auto | day | night
     tabLabelMax: 5, // characters shown in a tab before the name is clipped
     grouping: false, // show custom groups instead of a flat list
@@ -147,7 +148,9 @@ function isDrawerOpen(drawer) {
 }
 
 function getOpenDrawers() {
-    return getDrawers().filter(drawer => !drawer.classList.contains('emm-filtered') && isDrawerOpen(drawer));
+    return getDrawers().filter(drawer => !drawer.classList.contains('emm-filtered')
+        && !isBuiltinHidden(drawer)
+        && isDrawerOpen(drawer));
 }
 
 function openDrawer(drawer) {
@@ -186,6 +189,15 @@ function normalizeGroups() {
                 members: Array.isArray(group.members) ? group.members.map(String) : [],
             };
         });
+
+    const claimed = new Set();
+    for (const group of settings.groups) {
+        group.members = group.members.filter(title => {
+            if (claimed.has(title)) return false;
+            claimed.add(title);
+            return true;
+        });
+    }
 }
 
 function findGroupForTitle(title) {
@@ -244,6 +256,7 @@ function buildGroupSection(group, drawers) {
         <i class="fa-solid fa-chevron-down emm-group-caret" aria-hidden="true"></i>
         <span class="emm-group-name"></span>
         <span class="emm-group-count"></span>
+        <span class="emm-group-spacer"></span>
     `;
     head.querySelector('.emm-group-name').textContent = group.name;
     head.querySelector('.emm-group-count').textContent = String(drawers.length);
@@ -399,8 +412,51 @@ function updateGroupVisibility() {
     for (const section of wrap.querySelectorAll('.emm-group')) {
         const drawers = [...section.querySelectorAll('.inline-drawer')]
             .filter(drawer => !drawer.parentElement.closest('.inline-drawer'));
-        section.hidden = !drawers.some(drawer => !drawer.classList.contains('emm-filtered'));
+        const visible = drawers.filter(drawer => !drawer.classList.contains('emm-filtered')
+            && !isBuiltinHidden(drawer));
+        section.hidden = visible.length === 0;
+        const count = section.querySelector('.emm-group-count');
+        if (count) count.textContent = String(visible.length);
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* Built-in blocks (Assets / deprecated Extras API)                    */
+/* ------------------------------------------------------------------ */
+
+function markBuiltins() {
+    for (const drawer of document.querySelectorAll('#assets_container .inline-drawer')) {
+        drawer.dataset.emmBuiltin = 'assets';
+    }
+
+    document.querySelectorAll('[data-emm-builtin="api"]')
+        .forEach(element => element.removeAttribute('data-emm-builtin'));
+
+    const heading = [...document.querySelectorAll('#rm_extensions_block h4, #rm_extensions_block h3')]
+        .find(element => element.textContent.includes('扩展API') || element.textContent.includes('Extensions API'));
+    if (!heading) return;
+
+    const titleRow = heading.parentElement;
+    if (!titleRow?.closest('#rm_extensions_block')) return;
+    titleRow.dataset.emmBuiltin = 'api';
+
+    const separator = titleRow.previousElementSibling;
+    if (separator?.tagName === 'HR') separator.dataset.emmBuiltin = 'api';
+
+    const inputRow = titleRow.nextElementSibling;
+    if (inputRow?.classList.contains('alignitemsflexstart')) inputRow.dataset.emmBuiltin = 'api';
+}
+
+function isBuiltinHidden(drawer) {
+    if (!settings.hideBuiltins) return false;
+    if (drawer?.dataset?.emmBuiltin === 'assets') return true;
+    return !!drawer?.closest?.('[data-emm-builtin="assets"]');
+}
+
+function applyBuiltinVisibility() {
+    markBuiltins();
+    document.querySelector('#rm_extensions_block')
+        ?.classList.toggle('emm-hide-builtins', !!settings.hideBuiltins);
 }
 
 function buildGroupEditorRow(group, titles) {
@@ -416,7 +472,6 @@ function buildGroupEditorRow(group, titles) {
     enabled.addEventListener('change', () => {
         group.enabled = enabled.checked;
         saveSettings();
-        renderGearGroups();
         applyGrouping(true);
     });
 
@@ -430,7 +485,6 @@ function buildGroupEditorRow(group, titles) {
         group.name = normalize(name.value) || group.name;
         name.value = group.name;
         saveSettings();
-        renderGearGroups();
         applyGrouping(true);
     });
 
@@ -443,7 +497,6 @@ function buildGroupEditorRow(group, titles) {
         settings.groups = settings.groups.filter(item => item.id !== group.id);
         saveSettings();
         renderGroupEditor();
-        renderGearGroups();
         applyGrouping(true);
     });
 
@@ -466,9 +519,14 @@ function buildGroupEditorRow(group, titles) {
                 .filter(input => input.checked)
                 .map(input => input.value);
             group.members = checked;
-            summary.textContent = `成员 ${checked.length}`;
+            if (box.checked) {
+                for (const other of settings.groups) {
+                    if (other.id === group.id) continue;
+                    other.members = other.members.filter(member => member !== title);
+                }
+            }
             saveSettings();
-            renderGearGroups();
+            renderGroupEditor();
             applyGrouping(true);
         });
         const text = document.createElement('span');
@@ -503,40 +561,6 @@ function renderGroupEditor() {
     }
 }
 
-function renderGearGroups() {
-    const host = document.getElementById('emm-acc-groups');
-    if (!host) return;
-    host.textContent = '';
-    if (!settings.groups.length) {
-        const empty = document.createElement('div');
-        empty.className = 'emm-acc-empty';
-        empty.textContent = '还没有分组，去设置里添加';
-        host.append(empty);
-        return;
-    }
-    for (const group of settings.groups) {
-        const label = document.createElement('label');
-        label.className = 'emm-acc-group';
-        const box = document.createElement('input');
-        box.type = 'checkbox';
-        box.checked = group.enabled;
-        box.addEventListener('change', () => {
-            group.enabled = box.checked;
-            saveSettings();
-            renderGroupEditor();
-            applyGrouping(true);
-        });
-        const name = document.createElement('span');
-        name.className = 'emm-acc-name';
-        name.textContent = group.name;
-        const count = document.createElement('span');
-        count.className = 'emm-acc-count';
-        count.textContent = String(group.members.length);
-        label.append(box, name, count);
-        host.append(label);
-    }
-}
-
 function addGroup(rawName) {
     normalizeGroups();
     const name = normalize(rawName) || `分组 ${settings.groups.length + 1}`;
@@ -549,7 +573,6 @@ function addGroup(rawName) {
     });
     saveSettings();
     renderGroupEditor();
-    renderGearGroups();
     applyGrouping(true);
 }
 
@@ -608,23 +631,13 @@ function buildToolbar() {
                     <button type="button" class="emm-menu-item" data-action="settings">
                         <i class="fa-solid fa-sliders"></i><span>设置界面</span>
                     </button>
-                    <div class="emm-gear-acc">
-                        <div class="emm-gear-acc-head">
-                            <label class="emm-switch-label" for="emm-grouping-toggle">
-                                <input id="emm-grouping-toggle" type="checkbox">
-                                <span>启用分组展示</span>
-                            </label>
-                            <button id="emm-acc-chevron" type="button" class="emm-acc-chevron" title="展开分组列表">
-                                <i class="fa-solid fa-chevron-down"></i>
-                            </button>
-                        </div>
-                        <div id="emm-acc-body" class="emm-acc-body" hidden>
-                            <div id="emm-acc-groups"></div>
-                            <button type="button" class="emm-menu-item emm-manage-groups" data-action="manage-groups">
-                                <i class="fa-solid fa-pen-to-square"></i><span>管理分组…</span>
-                            </button>
-                        </div>
-                    </div>
+                    <button type="button" class="emm-menu-item" data-action="manage-groups">
+                        <i class="fa-solid fa-pen-to-square"></i><span>管理分组</span>
+                    </button>
+                    <label class="emm-menu-item emm-menu-toggle" for="emm-grouping-toggle">
+                        <i class="fa-solid fa-layer-group"></i><span>启用分组</span>
+                        <input id="emm-grouping-toggle" type="checkbox" class="emm-toggle-input">
+                    </label>
                 </div>
             </div>
         </div>
@@ -672,8 +685,6 @@ function buildToolbar() {
     ui.gearMenu = document.getElementById('emm-gear-menu');
     ui.gearWrap = document.querySelector('.emm-gear-wrap');
     ui.groupingToggle = /** @type {HTMLInputElement} */ (document.getElementById('emm-grouping-toggle'));
-    ui.accChevron = document.getElementById('emm-acc-chevron');
-    ui.accBody = document.getElementById('emm-acc-body');
     ui.noResults = document.getElementById('emm-no-results');
     ui.kebab = document.getElementById('emm-kebab');
     ui.dropdown = document.getElementById('emm-dropdown');
@@ -713,23 +724,16 @@ function appendSettingsDrawer() {
                 <i class="fa-solid fa-ellipsis emm-opt-icon" aria-hidden="true"></i>
                 <span>收纳顶部按钮</span>
             </label>
+            <label class="checkbox_label" for="emm-opt-hidebuiltins" title="隐藏下载扩展和资源菜单、已弃用的扩展API区块">
+                <input id="emm-opt-hidebuiltins" type="checkbox">
+                <i class="fa-solid fa-eye-slash emm-opt-icon" aria-hidden="true"></i>
+                <span>隐藏内置区块</span>
+            </label>
             <div class="emm-select-row">
                 <i class="fa-solid fa-tag emm-opt-icon" aria-hidden="true"></i>
                 <label for="emm-opt-labelmax">标签字数上限</label>
                 <input id="emm-opt-labelmax" class="text_pole emm-number" type="number"
                        min="2" max="30" step="1" inputmode="numeric">
-            </div>
-            <div class="emm-group-editor" id="emm-group-editor">
-                <div class="emm-section-title">
-                    <i class="fa-solid fa-layer-group emm-opt-icon" aria-hidden="true"></i>
-                    <span>分组</span>
-                </div>
-                <div id="emm-group-rows"></div>
-                <div class="emm-add-group">
-                    <input id="emm-new-group" class="text_pole" type="text" maxlength="16"
-                           placeholder="新分组名称" aria-label="新分组名称">
-                    <button id="emm-add-group-btn" type="button" class="menu_button">添加</button>
-                </div>
             </div>
             <div class="emm-hint">
                 点击标签跳转；✕ 单独折叠，右上角一键全部折叠。收纳后管理与安装进入 ⋯ 菜单。<br>
@@ -752,6 +756,7 @@ function appendSettingsDrawer() {
     const options = [
         ['emm-opt-compact', 'compactActions'],
         ['emm-opt-search', 'showSearch'],
+        ['emm-opt-hidebuiltins', 'hideBuiltins'],
     ];
     for (const [id, key] of options) {
         const input = /** @type {HTMLInputElement} */ (document.getElementById(id));
@@ -775,25 +780,69 @@ function appendSettingsDrawer() {
         });
     }
 
+    normalizeGroups();
+}
+
+function buildGroupModal() {
+    if (document.getElementById('emm-group-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'emm-group-modal';
+    modal.className = 'emm-modal';
+    modal.hidden = true;
+    modal.innerHTML = `
+        <div class="emm-modal-backdrop" data-action="close"></div>
+        <div class="emm-modal-card" role="dialog" aria-modal="true" aria-label="管理分组">
+            <div class="emm-modal-head">
+                <b>管理分组</b>
+                <button type="button" class="emm-icon-btn emm-modal-close" data-action="close" title="关闭">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="emm-modal-body">
+                <div class="emm-add-group">
+                    <input id="emm-new-group" class="text_pole" type="text" maxlength="16"
+                           placeholder="新分组名称" aria-label="新分组名称">
+                    <button id="emm-add-group-btn" type="button" class="menu_button">添加</button>
+                </div>
+                <div id="emm-group-rows"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', event => {
+        if (event.target.closest('[data-action="close"]')) closeGroupModal();
+    });
+
     const newGroup = /** @type {HTMLInputElement} */ (document.getElementById('emm-new-group'));
-    const addGroupBtn = document.getElementById('emm-add-group-btn');
     const commitGroup = () => {
         if (!newGroup || !normalize(newGroup.value)) return;
         addGroup(newGroup.value);
         newGroup.value = '';
         newGroup.focus();
     };
-    addGroupBtn?.addEventListener('click', commitGroup);
+    document.getElementById('emm-add-group-btn')?.addEventListener('click', commitGroup);
     newGroup?.addEventListener('keydown', event => {
         if (event.key === 'Enter') {
             event.preventDefault();
             commitGroup();
         }
     });
+}
 
+function openGroupModal() {
+    const modal = document.getElementById('emm-group-modal');
+    if (!modal) return;
     normalizeGroups();
     renderGroupEditor();
-    renderGearGroups();
+    modal.hidden = false;
+    document.body.classList.add('emm-modal-open');
+    setTimeout(() => document.getElementById('emm-new-group')?.focus(), 60);
+}
+
+function closeGroupModal() {
+    const modal = document.getElementById('emm-group-modal');
+    if (modal) modal.hidden = true;
+    document.body.classList.remove('emm-modal-open');
 }
 
 /* ------------------------------------------------------------------ */
@@ -832,10 +881,12 @@ function updateLayout() {
     }
 
     applyThemeMode();
+    applyBuiltinVisibility();
 
     for (const [id, key] of [
         ['emm-opt-compact', 'compactActions'],
         ['emm-opt-search', 'showSearch'],
+        ['emm-opt-hidebuiltins', 'hideBuiltins'],
     ]) {
         const input = /** @type {HTMLInputElement} */ (document.getElementById(id));
         if (input) input.checked = !!settings[key];
@@ -1083,19 +1134,13 @@ function refresh() {
     updateGroupVisibility();
 }
 
-function openSettingsPanel(focusGroups) {
+function openSettingsPanel() {
     const drawer = document.getElementById('emm-settings-drawer');
     if (!drawer) return;
     if (state.filter) clearSearch();
     expandGroupFor(drawer);
     if (!isDrawerOpen(drawer)) getHeader(drawer)?.click();
-    setTimeout(() => {
-        scrollToDrawer(drawer);
-        if (focusGroups) {
-            document.getElementById('emm-new-group')?.focus({ preventScroll: true });
-            document.getElementById('emm-group-editor')?.scrollIntoView({ block: 'nearest' });
-        }
-    }, 80);
+    setTimeout(() => scrollToDrawer(drawer), 80);
 }
 
 function scheduleRefresh(delay = 120) {
@@ -1190,24 +1235,20 @@ function bindUi() {
         ui.gearMenu.hidden = !willOpen;
         if (willOpen) {
             if (ui.groupingToggle) ui.groupingToggle.checked = !!settings.grouping;
-            renderGearGroups();
             applyGrouping();
         }
     });
 
     ui.gearMenu?.addEventListener('click', event => {
         const item = event.target.closest('.emm-menu-item');
-        if (item) {
-            if (item.dataset.action === 'settings') openSettingsPanel(false);
-            else if (item.dataset.action === 'manage-groups') openSettingsPanel(true);
+        if (!item) return;
+        const action = item.dataset.action;
+        if (action === 'settings') {
             ui.gearMenu.hidden = true;
-            return;
-        }
-        if (event.target.closest('#emm-acc-chevron')) {
-            if (!ui.accBody) return;
-            ui.accBody.hidden = !ui.accBody.hidden;
-            ui.accChevron?.classList.toggle('emm-open', !ui.accBody.hidden);
-            if (!ui.accBody.hidden) renderGearGroups();
+            openSettingsPanel();
+        } else if (action === 'manage-groups') {
+            ui.gearMenu.hidden = true;
+            openGroupModal();
         }
     });
 
@@ -1323,6 +1364,7 @@ function init() {
     if (document.getElementById('emm-sticky')) return true;
     if (!buildToolbar()) return false;
     appendSettingsDrawer();
+    buildGroupModal();
     bindUi();
     updateLayout();
     refresh();
