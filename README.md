@@ -1,4 +1,4 @@
-﻿# 扩展管理器 +（Extension Manager Plus）
+# 扩展管理器（Extension Manager）
 
 一个纯前端的 SillyTavern UI 扩展，用来增强左侧「扩展」设置抽屉：吸顶顶栏、搜索扩展、已展开扩展标签页、一键折叠，以及可选的顶栏主题。
 
@@ -12,7 +12,7 @@
 - **一键折叠**：标签条右侧的向内收拢图标折叠全部；每个标签的 ✕ 单独折叠。
 - **收纳顶栏按钮**：默认把「管理扩展 / 安装扩展」收进 ⋯ 菜单，仍调用 ST 原生弹窗；可在设置里切回原生按钮。
 - **顶栏主题**：跟随酒馆 / 日间 / 夜间，只作用于本扩展的顶栏、标签、搜索框和菜单，不改 ST 全局主题。
-- **扩展设置**：列表里的「扩展管理器 +」可分别开关吸顶、搜索框、标签页、按钮收纳，并选择主题。
+- **扩展设置**：列表里的「扩展管理器」可分别开关吸顶、搜索框、标签页、按钮收纳，并选择主题。
 
 ## 通过 GitHub 安装（推荐）
 
@@ -21,19 +21,21 @@
 3. 粘贴仓库地址：
 
    ```
-   https://github.com/Fenaunn1/ST-Extension-Manager-Plus
+   https://github.com/Fenaunn1/ST-Extension-Manager
    ```
 
 4. 确认后刷新页面（建议 Ctrl+F5）。
 
-之后可在扩展列表的「扩展管理器 +」里调整设置。
+之后可在扩展列表的「扩展管理器」里调整设置。
+
+> 旧地址 `ST-Extension-Manager-Plus` 在 GitHub 改名后仍会重定向，但建议改用上面的新地址。
 
 ## 手动安装
 
-把整个 `ST-Extension-Manager-Plus` 文件夹放到下面任一位置，然后刷新页面：
+把整个 `ST-Extension-Manager` 文件夹放到下面任一位置，然后刷新页面：
 
-- 用户级：`<SillyTavern>/data/<用户名或 default-user>/extensions/ST-Extension-Manager-Plus/`
-- 全局：`<SillyTavern>/public/scripts/extensions/third-party/ST-Extension-Manager-Plus/`
+- 用户级：`<SillyTavern>/data/<用户名或 default-user>/extensions/ST-Extension-Manager/`
+- 全局：`<SillyTavern>/public/scripts/extensions/third-party/ST-Extension-Manager/`
 
 ## 使用
 
@@ -43,7 +45,7 @@
 
 ## 设置项
 
-设置保存在 `extension_settings.extension_manager_plus`：
+设置保存在 `extension_settings.extension_manager`（会从旧的 `extension_manager_plus` 自动迁移）：
 
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
@@ -63,8 +65,8 @@
 ## 文件结构
 
 ```text
-ST-Extension-Manager-Plus/
-├─ manifest.json   # display_name = 扩展管理器 +，loading_order = 1000
+ST-Extension-Manager/
+├─ manifest.json   # display_name = 扩展管理器，loading_order = 1000
 ├─ index.js        # 工具栏、搜索、标签、折叠、设置、主题
 ├─ style.css       # 顶栏 / 标签 / 下拉菜单 / 日间夜间配色
 └─ README.md
@@ -72,8 +74,8 @@ ST-Extension-Manager-Plus/
 
 ## 版本
 
+- 1.0.1：更名为「扩展管理器」，仓库改为 `ST-Extension-Manager`；收纳菜单图标统一为横向 ⋯；设置键迁移到 `extension_manager`。
 - 1.0.0：正式版；左右留白、紧凑图标与设置面板间距；日间/夜间搜索框强制使用主题色；夜间改为中性灰黑；精简说明文案。
 - 0.1.2：新增「跟随酒馆 / 日间 / 夜间」顶栏主题，跟随模式随 ST 主题实时更新。
 - 0.1.1：加大搜索框与标签条间距；一键折叠改用向内收拢图标；设置项按字数排序、去括号、加图标；标题解析缓存。
 - 0.1.0：首版，包含吸顶、搜索、标签页、一键折叠、按钮收纳。
-

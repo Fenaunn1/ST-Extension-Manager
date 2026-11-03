@@ -1,5 +1,5 @@
 /**
- * Extension Manager + — a UI-only SillyTavern extension.
+ * Extension Manager — a UI-only SillyTavern extension.
  *
  * It enhances the built-in "Extensions" drawer:
  *  - sticky top toolbar (header + search + open-extension tabs)
@@ -12,8 +12,9 @@
 import { extension_settings } from '../../../extensions.js';
 import { saveSettingsDebounced } from '../../../../script.js';
 
-const MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.0.0';
+const MODULE_NAME = 'extension_manager';
+const LEGACY_MODULE_NAME = 'extension_manager_plus';
+const VERSION = '1.0.1';
 
 const DEFAULTS = {
     compactActions: true, // fold Manage/Install into the ⋯ menu
@@ -23,7 +24,11 @@ const DEFAULTS = {
     theme: 'auto', // auto | day | night
 };
 
-const settings = Object.assign({}, DEFAULTS, extension_settings[MODULE_NAME] ?? {});
+const settings = Object.assign(
+    {},
+    DEFAULTS,
+    extension_settings[MODULE_NAME] ?? extension_settings[LEGACY_MODULE_NAME] ?? {},
+);
 extension_settings[MODULE_NAME] = settings;
 
 const state = {
@@ -209,7 +214,7 @@ function buildToolbar() {
     menuWrap.className = 'emm-menu-wrap';
     menuWrap.innerHTML = `
         <div id="emm-kebab" class="menu_button emm-kebab" title="扩展操作">
-            <i class="fa-solid fa-ellipsis-vertical"></i>
+            <i class="fa-solid fa-ellipsis"></i>
         </div>
         <div id="emm-dropdown" class="emm-dropdown" hidden>
             <button type="button" class="emm-menu-item" data-action="manage">
@@ -258,7 +263,7 @@ function appendSettingsDrawer() {
     drawer.id = 'emm-settings-drawer';
     drawer.innerHTML = `
         <div class="inline-drawer-toggle inline-drawer-header">
-            <b>扩展管理器 +</b>
+            <b>扩展管理器</b>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div class="inline-drawer-content" style="display: none;">

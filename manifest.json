@@ -1,12 +1,12 @@
 {
-  "display_name": "扩展管理器 +",
+  "display_name": "扩展管理器",
   "loading_order": 1000,
   "requires": [],
   "optional": [],
   "js": "index.js",
   "css": "style.css",
   "author": "feng",
-  "version": "1.0.0",
-  "homePage": "https://github.com/Fenaunn1/ST-Extension-Manager-Plus",
+  "version": "1.0.1",
+  "homePage": "https://github.com/Fenaunn1/ST-Extension-Manager",
   "auto_update": false
 }
