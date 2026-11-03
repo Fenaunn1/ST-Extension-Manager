@@ -14,14 +14,16 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.0.1';
+const VERSION = '1.1.0';
+const UNGROUPED_ID = '__ungrouped';
 
 const DEFAULTS = {
     compactActions: true, // fold Manage/Install into the ⋯ menu
     showSearch: true,
-    showTabs: true,
-    sticky: true,
     theme: 'auto', // auto | day | night
+    tabLabelMax: 5, // characters shown in a tab before the name is clipped
+    grouping: false, // show custom groups instead of a flat list
+    groups: [], // [{ id, name, enabled, collapsed, members: [title] }]
 };
 
 const settings = Object.assign(
@@ -40,6 +42,8 @@ const state = {
     refreshTimer: 0,
     observer: null,
     spyLocked: false,
+    groupSignature: '',
+    origin: new Map(),
 };
 
 const ui = {};
@@ -60,7 +64,7 @@ function isTopLevelDrawer(drawer) {
 
 function getDrawers() {
     const drawers = [];
-    for (const selector of ['#extensions_settings', '#extensions_settings2']) {
+    for (const selector of ['#extensions_settings', '#extensions_settings2', '#emm-groups']) {
         const root = document.querySelector(selector);
         if (!root) continue;
         for (const drawer of root.querySelectorAll('.inline-drawer')) {
@@ -156,6 +160,398 @@ function collapseDrawer(drawer) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Groups                                                              */
+/* ------------------------------------------------------------------ */
+
+function saveSettings() {
+    extension_settings[MODULE_NAME] = settings;
+    saveSettingsDebounced();
+}
+
+function normalizeGroups() {
+    if (!Array.isArray(settings.groups)) settings.groups = [];
+    const seen = new Set();
+    settings.groups = settings.groups
+        .filter(group => group && typeof group === 'object')
+        .map((group, index) => {
+            let id = String(group.id || `g${index + 1}`);
+            while (seen.has(id)) id = `${id}x`;
+            seen.add(id);
+            return {
+                id,
+                name: normalize(group.name) || `分组 ${index + 1}`,
+                enabled: group.enabled !== false,
+                collapsed: !!group.collapsed,
+                members: Array.isArray(group.members) ? group.members.map(String) : [],
+            };
+        });
+}
+
+function findGroupForTitle(title) {
+    return settings.groups.find(group => group.members.includes(title)) ?? null;
+}
+
+function clampLabelMax(value) {
+    const parsed = Number.parseInt(String(value), 10);
+    if (!Number.isFinite(parsed)) return 5;
+    return Math.min(30, Math.max(2, parsed));
+}
+
+function tabLabel(title) {
+    const max = clampLabelMax(settings.tabLabelMax);
+    const chars = Array.from(title);
+    return chars.length > max ? `${chars.slice(0, max).join('')}…` : title;
+}
+
+function ensureGroupHost() {
+    const host = document.querySelector('#rm_extensions_block .extensions_block');
+    if (!host) return null;
+    let wrap = document.getElementById('emm-groups');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'emm-groups';
+        const anchor = document.getElementById('extensions_settings') ?? host.firstChild;
+        host.insertBefore(wrap, anchor);
+    }
+    return wrap;
+}
+
+function setNativeRootsHidden(hidden) {
+    for (const id of ['extensions_settings', 'extensions_settings2']) {
+        const root = document.getElementById(id);
+        if (root) root.style.display = hidden ? 'none' : '';
+    }
+}
+
+function groupSignature() {
+    const titles = getDrawers().map(drawer => getTitle(drawer)).join('\u0001');
+    const groups = settings.groups
+        .map(group => [group.id, group.enabled ? 1 : 0, group.name, group.members.join(',')].join(':'))
+        .join('\u0002');
+    return `${titles}\u0003${groups}`;
+}
+
+function buildGroupSection(group, drawers) {
+    const section = document.createElement('section');
+    section.className = 'emm-group';
+    section.dataset.groupId = group.id;
+
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'emm-group-head';
+    head.innerHTML = `
+        <i class="fa-solid fa-chevron-down emm-group-caret" aria-hidden="true"></i>
+        <span class="emm-group-name"></span>
+        <span class="emm-group-count"></span>
+    `;
+    head.querySelector('.emm-group-name').textContent = group.name;
+    head.querySelector('.emm-group-count').textContent = String(drawers.length);
+    head.addEventListener('click', () => {
+        const collapsed = section.classList.toggle('emm-collapsed');
+        if (group.id === UNGROUPED_ID) {
+            state.ungroupedCollapsed = collapsed;
+        } else {
+            group.collapsed = collapsed;
+            saveSettings();
+        }
+    });
+
+    const body = document.createElement('div');
+    body.className = 'emm-group-body';
+    const split = Math.ceil(drawers.length / 2);
+    for (const slice of [drawers.slice(0, split), drawers.slice(split)]) {
+        const column = document.createElement('div');
+        column.className = 'emm-group-col';
+        column.append(...slice);
+        body.append(column);
+    }
+
+    if (group.collapsed) section.classList.add('emm-collapsed');
+    section.append(head, body);
+    return section;
+}
+
+function renderGrouped() {
+    const wrap = ensureGroupHost();
+    if (!wrap) return;
+
+    const all = getDrawers();
+    if (!state.baseOrder) state.baseOrder = new Map();
+    let seq = state.baseOrder.size;
+    for (const drawer of all) {
+        if (!state.baseOrder.has(drawer)) state.baseOrder.set(drawer, seq++);
+        if (!state.origin.has(drawer)) {
+            state.origin.set(drawer, { parent: drawer.parentElement, next: drawer.nextElementSibling });
+        }
+    }
+    all.sort((a, b) => (state.baseOrder.get(a) ?? 0) - (state.baseOrder.get(b) ?? 0));
+
+    const buckets = new Map(settings.groups.map(group => [group.id, []]));
+    const ungrouped = [];
+    const hidden = [];
+    for (const drawer of all) {
+        if (drawer.id === 'emm-settings-drawer') {
+            ungrouped.push(drawer);
+            continue;
+        }
+        const group = findGroupForTitle(getTitle(drawer));
+        if (group && group.enabled) {
+            buckets.get(group.id).push(drawer);
+        } else if (group && !group.enabled) {
+            hidden.push(drawer);
+        } else {
+            ungrouped.push(drawer);
+        }
+    }
+
+    setNativeRootsHidden(false);
+
+    // Preserve drawers that are not part of the tracked set (for example a
+    // wrapper that appeared while a group was collapsed) instead of dropping
+    // them when the container is rebuilt.
+    const known = new Set(all);
+    const orphans = [];
+    for (const drawer of wrap.querySelectorAll('.inline-drawer')) {
+        if (drawer.parentElement?.closest('.inline-drawer')) continue;
+        if (!known.has(drawer)) orphans.push(drawer);
+    }
+    wrap.textContent = '';
+
+    for (const group of settings.groups) {
+        const members = buckets.get(group.id);
+        if (members?.length) wrap.append(buildGroupSection(group, members));
+    }
+
+    if (ungrouped.length) {
+        const section = buildGroupSection({ id: UNGROUPED_ID, name: '未分组' }, ungrouped);
+        if (state.ungroupedCollapsed) section.classList.add('emm-collapsed');
+        wrap.append(section);
+    }
+
+    if (hidden.length) {
+        const stash = document.createElement('div');
+        stash.id = 'emm-groups-hidden';
+        stash.hidden = true;
+        stash.append(...hidden);
+        wrap.append(stash);
+    }
+
+    const lost = [...state.origin.keys()].filter(drawer => !drawer.isConnected && !orphans.includes(drawer));
+    if (orphans.length || lost.length) {
+        for (const drawer of [...orphans, ...lost]) {
+            if (!state.origin.has(drawer)) {
+                state.origin.set(drawer, { parent: null, next: null });
+            }
+        }
+        const stash = document.createElement('div');
+        stash.id = 'emm-groups-orphans';
+        stash.hidden = true;
+        stash.append(...orphans, ...lost);
+        wrap.append(stash);
+    }
+
+    updateGroupVisibility();
+
+    const editing = document.activeElement?.closest?.('#emm-group-rows');
+    if (document.getElementById('emm-group-rows') && !editing) renderGroupEditor();
+}
+
+function teardownGrouping() {
+    const wrap = document.getElementById('emm-groups');
+    const entries = [...state.origin.entries()];
+    for (let index = entries.length - 1; index >= 0; index--) {
+        const [drawer, origin] = entries[index];
+        if (!drawer.isConnected) continue;
+        if (!origin.parent?.isConnected) {
+            document.querySelector('#extensions_settings')?.append(drawer);
+            continue;
+        }
+        const anchor = origin.next?.parentNode === origin.parent ? origin.next : null;
+        origin.parent.insertBefore(drawer, anchor);
+    }
+    state.origin.clear();
+    state.baseOrder = null;
+    state.groupSignature = '';
+    wrap?.remove();
+    setNativeRootsHidden(false);
+}
+function applyGrouping(force = false) {
+    if (!settings.grouping) {
+        if (document.getElementById('emm-groups') || state.origin.size) teardownGrouping();
+        return;
+    }
+    const signature = groupSignature();
+    if (!force && signature === state.groupSignature && document.getElementById('emm-groups')) {
+        updateGroupVisibility();
+        return;
+    }
+    state.groupSignature = signature;
+    renderGrouped();
+}
+
+function updateGroupVisibility() {
+    const wrap = document.getElementById('emm-groups');
+    if (!wrap) return;
+    wrap.classList.toggle('emm-searching', !!state.filter.trim());
+    if (!settings.grouping) return;
+    for (const section of wrap.querySelectorAll('.emm-group')) {
+        const drawers = [...section.querySelectorAll('.inline-drawer')]
+            .filter(drawer => !drawer.parentElement.closest('.inline-drawer'));
+        section.hidden = !drawers.some(drawer => !drawer.classList.contains('emm-filtered'));
+    }
+}
+
+function buildGroupEditorRow(group, titles) {
+    const row = document.createElement('div');
+    row.className = 'emm-group-row';
+    row.dataset.groupId = group.id;
+
+    const enabled = document.createElement('input');
+    enabled.type = 'checkbox';
+    enabled.checked = group.enabled;
+    enabled.title = '启用分组';
+    enabled.setAttribute('aria-label', `启用分组 ${group.name}`);
+    enabled.addEventListener('change', () => {
+        group.enabled = enabled.checked;
+        saveSettings();
+        renderGearGroups();
+        applyGrouping(true);
+    });
+
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.className = 'text_pole emm-group-name-input';
+    name.value = group.name;
+    name.maxLength = 16;
+    name.setAttribute('aria-label', '分组名称');
+    name.addEventListener('change', () => {
+        group.name = normalize(name.value) || group.name;
+        name.value = group.name;
+        saveSettings();
+        renderGearGroups();
+        applyGrouping(true);
+    });
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'emm-group-remove';
+    remove.title = '删除分组';
+    remove.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+    remove.addEventListener('click', () => {
+        settings.groups = settings.groups.filter(item => item.id !== group.id);
+        saveSettings();
+        renderGroupEditor();
+        renderGearGroups();
+        applyGrouping(true);
+    });
+
+    row.append(enabled, name, remove);
+
+    const members = document.createElement('details');
+    members.className = 'emm-group-members';
+    const summary = document.createElement('summary');
+    summary.textContent = `成员 ${group.members.length}`;
+    const list = document.createElement('div');
+    list.className = 'emm-member-list';
+    for (const title of titles) {
+        const label = document.createElement('label');
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.value = title;
+        box.checked = group.members.includes(title);
+        box.addEventListener('change', () => {
+            const checked = [...list.querySelectorAll('input[type="checkbox"]')]
+                .filter(input => input.checked)
+                .map(input => input.value);
+            group.members = checked;
+            summary.textContent = `成员 ${checked.length}`;
+            saveSettings();
+            renderGearGroups();
+            applyGrouping(true);
+        });
+        const text = document.createElement('span');
+        text.textContent = title;
+        label.append(box, text);
+        list.append(label);
+    }
+    members.append(summary, list);
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'emm-group-item';
+    wrapper.append(row, members);
+    return wrapper;
+}
+
+function renderGroupEditor() {
+    const host = document.getElementById('emm-group-rows');
+    if (!host) return;
+    host.textContent = '';
+    if (!settings.groups.length) {
+        const empty = document.createElement('div');
+        empty.className = 'emm-hint';
+        empty.textContent = '还没有分组';
+        host.append(empty);
+        return;
+    }
+    const titles = getDrawers()
+        .filter(drawer => drawer.id !== 'emm-settings-drawer')
+        .map(drawer => getTitle(drawer));
+    for (const group of settings.groups) {
+        host.append(buildGroupEditorRow(group, titles));
+    }
+}
+
+function renderGearGroups() {
+    const host = document.getElementById('emm-acc-groups');
+    if (!host) return;
+    host.textContent = '';
+    if (!settings.groups.length) {
+        const empty = document.createElement('div');
+        empty.className = 'emm-acc-empty';
+        empty.textContent = '还没有分组，去设置里添加';
+        host.append(empty);
+        return;
+    }
+    for (const group of settings.groups) {
+        const label = document.createElement('label');
+        label.className = 'emm-acc-group';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = group.enabled;
+        box.addEventListener('change', () => {
+            group.enabled = box.checked;
+            saveSettings();
+            renderGroupEditor();
+            applyGrouping(true);
+        });
+        const name = document.createElement('span');
+        name.className = 'emm-acc-name';
+        name.textContent = group.name;
+        const count = document.createElement('span');
+        count.className = 'emm-acc-count';
+        count.textContent = String(group.members.length);
+        label.append(box, name, count);
+        host.append(label);
+    }
+}
+
+function addGroup(rawName) {
+    normalizeGroups();
+    const name = normalize(rawName) || `分组 ${settings.groups.length + 1}`;
+    settings.groups.push({
+        id: `g${Date.now().toString(36)}`,
+        name,
+        enabled: true,
+        collapsed: false,
+        members: [],
+    });
+    saveSettings();
+    renderGroupEditor();
+    renderGearGroups();
+    applyGrouping(true);
+}
+
+/* ------------------------------------------------------------------ */
 /* Toolbar                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -202,8 +598,32 @@ function buildToolbar() {
             <div id="emm-collapse-all" class="menu_button emm-icon-btn" title="折叠全部已展开的扩展">
                 <i class="fa-solid fa-compress"></i>
             </div>
-            <div id="emm-settings-btn" class="menu_button emm-icon-btn" title="扩展管理器设置">
-                <i class="fa-solid fa-gear"></i>
+            <div class="emm-gear-wrap">
+                <div id="emm-settings-btn" class="menu_button emm-icon-btn" title="扩展管理器菜单">
+                    <i class="fa-solid fa-gear"></i>
+                </div>
+                <div id="emm-gear-menu" class="emm-dropdown emm-gear-menu" hidden>
+                    <button type="button" class="emm-menu-item" data-action="settings">
+                        <i class="fa-solid fa-sliders"></i><span>设置界面</span>
+                    </button>
+                    <div class="emm-gear-acc">
+                        <div class="emm-gear-acc-head">
+                            <label class="emm-switch-label" for="emm-grouping-toggle">
+                                <input id="emm-grouping-toggle" type="checkbox">
+                                <span>启用分组展示</span>
+                            </label>
+                            <button id="emm-acc-chevron" type="button" class="emm-acc-chevron" title="展开分组列表">
+                                <i class="fa-solid fa-chevron-down"></i>
+                            </button>
+                        </div>
+                        <div id="emm-acc-body" class="emm-acc-body" hidden>
+                            <div id="emm-acc-groups"></div>
+                            <button type="button" class="emm-menu-item emm-manage-groups" data-action="manage-groups">
+                                <i class="fa-solid fa-pen-to-square"></i><span>管理分组…</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div id="emm-no-results" class="emm-no-results" hidden>没有匹配的扩展</div>
@@ -247,6 +667,11 @@ function buildToolbar() {
     ui.tabsRight = document.getElementById('emm-tabs-right');
     ui.collapseAll = document.getElementById('emm-collapse-all');
     ui.settingsBtn = document.getElementById('emm-settings-btn');
+    ui.gearMenu = document.getElementById('emm-gear-menu');
+    ui.gearWrap = document.querySelector('.emm-gear-wrap');
+    ui.groupingToggle = /** @type {HTMLInputElement} */ (document.getElementById('emm-grouping-toggle'));
+    ui.accChevron = document.getElementById('emm-acc-chevron');
+    ui.accBody = document.getElementById('emm-acc-body');
     ui.noResults = document.getElementById('emm-no-results');
     ui.kebab = document.getElementById('emm-kebab');
     ui.dropdown = document.getElementById('emm-dropdown');
@@ -276,11 +701,6 @@ function appendSettingsDrawer() {
                     <option value="night">夜间</option>
                 </select>
             </div>
-            <label class="checkbox_label" for="emm-opt-sticky" title="滚动扩展列表时固定顶栏">
-                <input id="emm-opt-sticky" type="checkbox">
-                <i class="fa-solid fa-thumbtack emm-opt-icon" aria-hidden="true"></i>
-                <span>顶栏吸顶</span>
-            </label>
             <label class="checkbox_label" for="emm-opt-search" title="在顶栏显示搜索框">
                 <input id="emm-opt-search" type="checkbox">
                 <i class="fa-solid fa-magnifying-glass emm-opt-icon" aria-hidden="true"></i>
@@ -291,11 +711,24 @@ function appendSettingsDrawer() {
                 <i class="fa-solid fa-ellipsis emm-opt-icon" aria-hidden="true"></i>
                 <span>收纳顶部按钮</span>
             </label>
-            <label class="checkbox_label" for="emm-opt-tabs" title="用标签页列出已展开的扩展">
-                <input id="emm-opt-tabs" type="checkbox">
-                <i class="fa-solid fa-table-columns emm-opt-icon" aria-hidden="true"></i>
-                <span>显示已展开标签页</span>
-            </label>
+            <div class="emm-select-row">
+                <i class="fa-solid fa-tag emm-opt-icon" aria-hidden="true"></i>
+                <label for="emm-opt-labelmax">标签字数上限</label>
+                <input id="emm-opt-labelmax" class="text_pole emm-number" type="number"
+                       min="2" max="30" step="1" inputmode="numeric">
+            </div>
+            <div class="emm-group-editor" id="emm-group-editor">
+                <div class="emm-section-title">
+                    <i class="fa-solid fa-layer-group emm-opt-icon" aria-hidden="true"></i>
+                    <span>分组</span>
+                </div>
+                <div id="emm-group-rows"></div>
+                <div class="emm-add-group">
+                    <input id="emm-new-group" class="text_pole" type="text" maxlength="16"
+                           placeholder="新分组名称" aria-label="新分组名称">
+                    <button id="emm-add-group-btn" type="button" class="menu_button">添加</button>
+                </div>
+            </div>
             <div class="emm-hint">
                 点击标签跳转；✕ 单独折叠，右上角一键全部折叠。收纳后管理与安装进入 ⋯ 菜单。<br>
                 版本 ${VERSION}
@@ -309,8 +742,7 @@ function appendSettingsDrawer() {
         themeSelect.value = normalizeTheme(settings.theme);
         themeSelect.addEventListener('change', () => {
             settings.theme = normalizeTheme(themeSelect.value);
-            extension_settings[MODULE_NAME] = settings;
-            saveSettingsDebounced();
+            saveSettings();
             updateLayout();
         });
     }
@@ -318,20 +750,48 @@ function appendSettingsDrawer() {
     const options = [
         ['emm-opt-compact', 'compactActions'],
         ['emm-opt-search', 'showSearch'],
-        ['emm-opt-tabs', 'showTabs'],
-        ['emm-opt-sticky', 'sticky'],
     ];
     for (const [id, key] of options) {
         const input = /** @type {HTMLInputElement} */ (document.getElementById(id));
         input.checked = !!settings[key];
         input.addEventListener('change', () => {
             settings[key] = input.checked;
-            extension_settings[MODULE_NAME] = settings;
-            saveSettingsDebounced();
+            saveSettings();
             updateLayout();
             refresh();
         });
     }
+
+    const labelMax = /** @type {HTMLInputElement} */ (document.getElementById('emm-opt-labelmax'));
+    if (labelMax) {
+        labelMax.value = String(clampLabelMax(settings.tabLabelMax));
+        labelMax.addEventListener('change', () => {
+            settings.tabLabelMax = clampLabelMax(labelMax.value);
+            labelMax.value = String(settings.tabLabelMax);
+            saveSettings();
+            renderTabs(true);
+        });
+    }
+
+    const newGroup = /** @type {HTMLInputElement} */ (document.getElementById('emm-new-group'));
+    const addGroupBtn = document.getElementById('emm-add-group-btn');
+    const commitGroup = () => {
+        if (!newGroup || !normalize(newGroup.value)) return;
+        addGroup(newGroup.value);
+        newGroup.value = '';
+        newGroup.focus();
+    };
+    addGroupBtn?.addEventListener('click', commitGroup);
+    newGroup?.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            commitGroup();
+        }
+    });
+
+    normalizeGroups();
+    renderGroupEditor();
+    renderGearGroups();
 }
 
 /* ------------------------------------------------------------------ */
@@ -347,8 +807,6 @@ function updateLayout() {
     rm?.classList.toggle('emm-compact', !!settings.compactActions);
 
     if (ui.searchRow) ui.searchRow.hidden = !settings.showSearch;
-    if (ui.tabsRow) ui.tabsRow.hidden = !settings.showTabs;
-    if (ui.sticky) ui.sticky.classList.toggle('emm-sticky-off', !settings.sticky);
 
     if (!settings.showSearch && state.filter) {
         state.filter = '';
@@ -366,7 +824,9 @@ function updateLayout() {
         setHidden('hide-native', !!settings.compactActions);
     }
     if (ui.kebab) {
-        ui.kebab.title = settings.compactActions ? '扩展操作（管理 / 安装）' : '扩展操作';
+        ui.kebab.hidden = !settings.compactActions;
+        ui.kebab.title = '扩展操作（管理 / 安装）';
+        if (!settings.compactActions && ui.dropdown) ui.dropdown.hidden = true;
     }
 
     applyThemeMode();
@@ -374,8 +834,6 @@ function updateLayout() {
     for (const [id, key] of [
         ['emm-opt-compact', 'compactActions'],
         ['emm-opt-search', 'showSearch'],
-        ['emm-opt-tabs', 'showTabs'],
-        ['emm-opt-sticky', 'sticky'],
     ]) {
         const input = /** @type {HTMLInputElement} */ (document.getElementById(id));
         if (input) input.checked = !!settings[key];
@@ -383,6 +841,8 @@ function updateLayout() {
 
     const themeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('emm-opt-theme'));
     if (themeSelect) themeSelect.value = normalizeTheme(settings.theme);
+
+    applyGrouping();
 }
 
 /** Apply the toolbar's own day/night palette, or follow the ST theme. */
@@ -451,6 +911,7 @@ function applyFilter() {
     if (ui.searchClear) ui.searchClear.hidden = !query;
 
     renderTabs();
+    updateGroupVisibility();
 }
 
 function renderTabs(force = false) {
@@ -467,7 +928,7 @@ function renderTabs(force = false) {
             if (!tab) return;
             const title = getTitle(drawer);
             const label = tab.querySelector('.emm-tab-label');
-            if (label) label.textContent = title;
+            if (label) label.textContent = tabLabel(title);
             tab.title = title;
         });
         ui.collapseAll?.classList.toggle('emm-disabled', open.length === 0);
@@ -491,7 +952,7 @@ function renderTabs(force = false) {
 
         const label = document.createElement('span');
         label.className = 'emm-tab-label';
-        label.textContent = title;
+        label.textContent = tabLabel(title);
 
         const close = document.createElement('span');
         close.className = 'emm-tab-close';
@@ -516,16 +977,32 @@ function activateDrawer(drawer) {
     // target is the last drawer the container may not be able to scroll far
     // enough, and the scroll spy would otherwise jump to the previous header.
     state.spyLocked = true;
+    expandGroupFor(drawer);
     openDrawer(drawer);
     scrollToDrawer(drawer);
     syncActiveTab(true);
+}
+
+function expandGroupFor(drawer) {
+    const section = drawer.closest('.emm-group');
+    if (!section?.classList.contains('emm-collapsed')) return;
+    section.classList.remove('emm-collapsed');
+    if (section.dataset.groupId === UNGROUPED_ID) {
+        state.ungroupedCollapsed = false;
+        return;
+    }
+    const group = settings.groups.find(item => item.id === section.dataset.groupId);
+    if (group) {
+        group.collapsed = false;
+        saveSettings();
+    }
 }
 
 function scrollToDrawer(drawer) {
     const container = document.querySelector('#rm_extensions_block');
     if (!container) return;
 
-    const stickyHeight = settings.sticky && ui.sticky ? ui.sticky.offsetHeight : 0;
+    const stickyHeight = ui.sticky ? ui.sticky.offsetHeight : 0;
     const delta = drawer.getBoundingClientRect().top - container.getBoundingClientRect().top;
     const top = Math.max(0, container.scrollTop + delta - stickyHeight - 8);
     container.scrollTo({ top, behavior: 'smooth' });
@@ -578,7 +1055,7 @@ function updateActiveTabFromScroll() {
     const container = document.querySelector('#rm_extensions_block');
     if (!container) return;
 
-    const stickyHeight = settings.sticky && ui.sticky ? ui.sticky.offsetHeight : 0;
+    const stickyHeight = ui.sticky ? ui.sticky.offsetHeight : 0;
     const line = container.getBoundingClientRect().top + stickyHeight + 10;
     let current = open[0];
     for (const drawer of open) {
@@ -600,6 +1077,23 @@ function collapseAll() {
 
 function refresh() {
     applyFilter();
+    applyGrouping();
+    updateGroupVisibility();
+}
+
+function openSettingsPanel(focusGroups) {
+    const drawer = document.getElementById('emm-settings-drawer');
+    if (!drawer) return;
+    if (state.filter) clearSearch();
+    expandGroupFor(drawer);
+    if (!isDrawerOpen(drawer)) getHeader(drawer)?.click();
+    setTimeout(() => {
+        scrollToDrawer(drawer);
+        if (focusGroups) {
+            document.getElementById('emm-new-group')?.focus({ preventScroll: true });
+            document.getElementById('emm-group-editor')?.scrollIntoView({ block: 'nearest' });
+        }
+    }, 80);
 }
 
 function scheduleRefresh(delay = 120) {
@@ -675,40 +1169,75 @@ function bindUi() {
             document.querySelector('#third_party_extension_button')?.click();
         } else if (action === 'show-native') {
             settings.compactActions = false;
-            extension_settings[MODULE_NAME] = settings;
-            saveSettingsDebounced();
+            saveSettings();
             updateLayout();
             refresh();
         } else if (action === 'hide-native') {
             settings.compactActions = true;
-            extension_settings[MODULE_NAME] = settings;
-            saveSettingsDebounced();
+            saveSettings();
             updateLayout();
             refresh();
         }
         if (ui.dropdown) ui.dropdown.hidden = true;
     });
 
-    document.addEventListener('click', event => {
-        if (!ui.dropdown || ui.dropdown.hidden) return;
-        if (event.target.closest('.emm-menu-wrap')) return;
-        ui.dropdown.hidden = true;
-    });
-    document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && ui.dropdown && !ui.dropdown.hidden) {
-            ui.dropdown.hidden = true;
+    ui.settingsBtn?.addEventListener('click', event => {
+        event.stopPropagation();
+        if (!ui.gearMenu) return;
+        const willOpen = ui.gearMenu.hidden;
+        ui.gearMenu.hidden = !willOpen;
+        if (willOpen) {
+            if (ui.groupingToggle) ui.groupingToggle.checked = !!settings.grouping;
+            renderGearGroups();
+            applyGrouping();
         }
     });
 
-    ui.settingsBtn?.addEventListener('click', () => {
-        const drawer = document.getElementById('emm-settings-drawer');
-        if (!drawer) return;
-        if (state.filter) clearSearch();
-        if (!isDrawerOpen(drawer)) getHeader(drawer)?.click();
-        setTimeout(() => scrollToDrawer(drawer), 80);
+    ui.gearMenu?.addEventListener('click', event => {
+        const item = event.target.closest('.emm-menu-item');
+        if (item) {
+            if (item.dataset.action === 'settings') openSettingsPanel(false);
+            else if (item.dataset.action === 'manage-groups') openSettingsPanel(true);
+            ui.gearMenu.hidden = true;
+            return;
+        }
+        if (event.target.closest('#emm-acc-chevron')) {
+            if (!ui.accBody) return;
+            ui.accBody.hidden = !ui.accBody.hidden;
+            ui.accChevron?.classList.toggle('emm-open', !ui.accBody.hidden);
+            if (!ui.accBody.hidden) renderGearGroups();
+        }
+    });
+
+    ui.groupingToggle?.addEventListener('change', () => {
+        settings.grouping = ui.groupingToggle.checked;
+        saveSettings();
+        if (settings.grouping) normalizeGroups();
+        applyGrouping(true);
+        renderGroupEditor();
+    });
+
+    document.addEventListener('click', event => {
+        if (ui.dropdown && !ui.dropdown.hidden && !event.target.closest('.emm-menu-wrap')) {
+            ui.dropdown.hidden = true;
+        }
+        if (ui.gearMenu && !ui.gearMenu.hidden && !event.target.closest('.emm-gear-wrap')) {
+            ui.gearMenu.hidden = true;
+        }
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        if (ui.dropdown) ui.dropdown.hidden = true;
+        if (ui.gearMenu) ui.gearMenu.hidden = true;
     });
 
     const rm = document.querySelector('#rm_extensions_block');
+    rm?.addEventListener('click', event => {
+        const header = event.target.closest?.('.inline-drawer-header');
+        if (!header || !header.closest('#rm_extensions_block')) return;
+        requestAnimationFrame(() => refresh());
+        scheduleRefresh(340);
+    }, true);
     rm?.addEventListener('scroll', onScroll, { passive: true });
     for (const type of ['wheel', 'touchstart', 'pointerdown', 'keydown']) {
         rm?.addEventListener(type, () => {

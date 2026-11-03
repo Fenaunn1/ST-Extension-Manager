@@ -6,7 +6,7 @@
   "js": "index.js",
   "css": "style.css",
   "author": "feng",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "homePage": "https://github.com/Fenaunn1/ST-Extension-Manager",
   "auto_update": false
 }
