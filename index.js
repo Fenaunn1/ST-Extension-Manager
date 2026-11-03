@@ -14,8 +14,9 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.2.0';
+const VERSION = '1.3.2';
 const UNGROUPED_ID = '__ungrouped';
+const MODAL_CLOSE_MS = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 160;
 
 const DEFAULTS = {
     compactActions: true, // fold Manage/Install into the ⋯ menu
@@ -44,6 +45,11 @@ const state = {
     observer: null,
     spyLocked: false,
     groupSignature: '',
+    groupEditorSignature: '',
+    expandedGroups: new Set(),
+    edit: null,
+    confirm: null,
+    modalKeysBound: false,
     origin: new Map(),
     groupingReady: false,
 };
@@ -202,6 +208,13 @@ function normalizeGroups() {
 
 function findGroupForTitle(title) {
     return settings.groups.find(group => group.members.includes(title)) ?? null;
+}
+
+function groupNameExists(name, exceptId = null) {
+    const target = normalize(name).toLowerCase();
+    if (!target) return false;
+    return settings.groups.some(group => group.id !== exceptId
+        && normalize(group.name).toLowerCase() === target);
 }
 
 function clampLabelMax(value) {
@@ -366,8 +379,7 @@ function renderGrouped() {
 
     updateGroupVisibility();
 
-    const editing = document.activeElement?.closest?.('#emm-group-rows');
-    if (document.getElementById('emm-group-rows') && !editing) renderGroupEditor();
+    if (document.getElementById('emm-group-rows')) renderGroupEditor();
 }
 
 function teardownGrouping() {
@@ -459,121 +471,466 @@ function applyBuiltinVisibility() {
         ?.classList.toggle('emm-hide-builtins', !!settings.hideBuiltins);
 }
 
-function buildGroupEditorRow(group, titles) {
+function editableTitles() {
+    const seen = new Set();
+    const titles = [];
+    for (const drawer of getDrawers()) {
+        if (drawer.id === 'emm-settings-drawer') continue;
+        // Built-in sections are not extensions and cannot be grouped.
+        if (drawer.dataset.emmBuiltin === 'assets' || drawer.closest('#assets_container')) continue;
+        const title = getTitle(drawer);
+        if (seen.has(title)) continue;
+        seen.add(title);
+        titles.push(title);
+    }
+    return titles;
+}
+
+function groupEditorSignature() {
+    return settings.groups
+        .map(group => [group.id, group.name, group.enabled ? 1 : 0, group.members.join('\u0001')].join('\u0002'))
+        .join('\u0003');
+}
+
+/**
+ * One compact row per group: expand arrow, name, enable switch, edit, delete.
+ * Renaming and membership live in the edit dialog so this list stays quiet.
+ */
+function buildGroupManagerItem(group) {
+    const item = document.createElement('div');
+    item.className = 'emm-mg-item';
+    item.dataset.groupId = group.id;
+
     const row = document.createElement('div');
-    row.className = 'emm-group-row';
-    row.dataset.groupId = group.id;
+    row.className = 'emm-mg-row';
 
-    const enabled = document.createElement('input');
-    enabled.type = 'checkbox';
-    enabled.checked = group.enabled;
-    enabled.title = '启用分组';
-    enabled.setAttribute('aria-label', `启用分组 ${group.name}`);
-    enabled.addEventListener('change', () => {
-        group.enabled = enabled.checked;
+    const caret = document.createElement('button');
+    caret.type = 'button';
+    caret.className = 'emm-mg-caret';
+    caret.title = '展开 / 收起插件列表';
+    caret.setAttribute('aria-expanded', 'false');
+    caret.innerHTML = '<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>';
+
+    const name = document.createElement('button');
+    name.type = 'button';
+    name.className = 'emm-mg-name';
+    name.textContent = group.name;
+    name.title = group.name;
+
+    const switchLabel = document.createElement('label');
+    switchLabel.className = 'emm-switch';
+    switchLabel.title = group.enabled ? '分组已启用' : '分组已停用';
+    switchLabel.innerHTML = `
+        <input type="checkbox" class="emm-switch-input">
+        <span class="emm-switch-track"><span class="emm-switch-thumb"></span></span>
+    `;
+    const switchInput = /** @type {HTMLInputElement} */ (switchLabel.querySelector('input'));
+    switchInput.checked = group.enabled;
+    switchInput.setAttribute('aria-label', `启用分组 ${group.name}`);
+    switchInput.addEventListener('change', () => {
+        group.enabled = switchInput.checked;
+        switchLabel.title = switchInput.checked ? '分组已启用' : '分组已停用';
+        item.classList.toggle('is-off', !switchInput.checked);
         saveSettings();
         applyGrouping(true);
     });
 
-    const name = document.createElement('input');
-    name.type = 'text';
-    name.className = 'text_pole emm-group-name-input';
-    name.value = group.name;
-    name.maxLength = 16;
-    name.setAttribute('aria-label', '分组名称');
-    name.addEventListener('change', () => {
-        group.name = normalize(name.value) || group.name;
-        name.value = group.name;
-        saveSettings();
-        applyGrouping(true);
-    });
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'emm-mg-btn';
+    edit.title = '编辑分组';
+    edit.setAttribute('aria-label', `编辑分组 ${group.name}`);
+    edit.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i>';
+    edit.addEventListener('click', () => openGroupEditor(group.id));
 
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.className = 'emm-group-remove';
+    remove.className = 'emm-mg-btn emm-mg-delete';
     remove.title = '删除分组';
-    remove.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
-    remove.addEventListener('click', () => {
-        settings.groups = settings.groups.filter(item => item.id !== group.id);
-        saveSettings();
-        renderGroupEditor();
-        applyGrouping(true);
-    });
+    remove.setAttribute('aria-label', `删除分组 ${group.name}`);
+    remove.innerHTML = '<i class="fa-solid fa-trash-can" aria-hidden="true"></i>';
+    remove.addEventListener('click', () => requestDeleteGroup(group));
 
-    row.append(enabled, name, remove);
+    row.append(caret, name, switchLabel, edit, remove);
 
-    const members = document.createElement('details');
-    members.className = 'emm-group-members';
-    const summary = document.createElement('summary');
-    summary.textContent = `成员 ${group.members.length}`;
-    const list = document.createElement('div');
-    list.className = 'emm-member-list';
-    for (const title of titles) {
-        const label = document.createElement('label');
-        const box = document.createElement('input');
-        box.type = 'checkbox';
-        box.value = title;
-        box.checked = group.members.includes(title);
-        box.addEventListener('change', () => {
-            const checked = [...list.querySelectorAll('input[type="checkbox"]')]
-                .filter(input => input.checked)
-                .map(input => input.value);
-            group.members = checked;
-            if (box.checked) {
-                for (const other of settings.groups) {
-                    if (other.id === group.id) continue;
-                    other.members = other.members.filter(member => member !== title);
-                }
-            }
-            saveSettings();
-            renderGroupEditor();
-            applyGrouping(true);
-        });
-        const text = document.createElement('span');
-        text.textContent = title;
-        label.append(box, text);
-        list.append(label);
+    const body = document.createElement('div');
+    body.className = 'emm-mg-members';
+    if (group.members.length) {
+        for (const title of group.members) {
+            const chip = document.createElement('span');
+            chip.className = 'emm-chip';
+            chip.textContent = title;
+            chip.title = title;
+            body.append(chip);
+        }
+    } else {
+        const empty = document.createElement('span');
+        empty.className = 'emm-mg-empty';
+        empty.textContent = '还没有插件，点击编辑图标添加';
+        body.append(empty);
     }
-    members.append(summary, list);
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'emm-group-item';
-    wrapper.append(row, members);
-    return wrapper;
+    item.append(row, body);
+    item.classList.toggle('is-off', !group.enabled);
+
+    const setOpen = open => {
+        item.classList.toggle('open', open);
+        body.hidden = !open;
+        caret.setAttribute('aria-expanded', String(open));
+        if (open) state.expandedGroups.add(group.id);
+        else state.expandedGroups.delete(group.id);
+    };
+    setOpen(state.expandedGroups.has(group.id));
+    caret.addEventListener('click', () => setOpen(!item.classList.contains('open')));
+    name.addEventListener('click', () => setOpen(!item.classList.contains('open')));
+
+    return item;
 }
 
-function renderGroupEditor() {
+function renderGroupEditor(force = false) {
     const host = document.getElementById('emm-group-rows');
     if (!host) return;
+    const signature = groupEditorSignature();
+    if (!force && signature === state.groupEditorSignature && host.childElementCount) return;
+    state.groupEditorSignature = signature;
+
+    const body = host.closest('.emm-modal-body');
+    const scrollTop = body?.scrollTop ?? 0;
     host.textContent = '';
     if (!settings.groups.length) {
         const empty = document.createElement('div');
-        empty.className = 'emm-hint';
-        empty.textContent = '还没有分组';
+        empty.className = 'emm-groups-empty';
+        empty.textContent = '还没有分组，输入名称添加第一个分组';
+        host.append(empty);
+    } else {
+        for (const group of settings.groups) host.append(buildGroupManagerItem(group));
+    }
+    if (body) body.scrollTop = scrollTop;
+}
+
+function openGroupEditor(groupId) {
+    normalizeGroups();
+    const group = settings.groups.find(item => item.id === groupId);
+    if (!group) return;
+
+    const assign = new Map();
+    for (const title of editableTitles()) {
+        assign.set(title, findGroupForTitle(title)?.id ?? null);
+    }
+
+    state.edit = { groupId, name: group.name, assign, tab: 'ungrouped' };
+    renderGroupEditModal();
+
+    const modal = document.getElementById('emm-group-edit');
+    if (!modal) return;
+    openModalLayer(modal);
+    syncModalLock();
+    setTimeout(() => {
+        const input = /** @type {HTMLInputElement} */ (document.getElementById('emm-edit-name'));
+        if (!input) return;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+    }, 50);
+}
+
+function renderGroupEditModal() {
+    const edit = state.edit;
+    if (!edit) return;
+    const group = settings.groups.find(item => item.id === edit.groupId);
+    if (!group) {
+        closeGroupEditModal();
+        return;
+    }
+    const nameInput = /** @type {HTMLInputElement} */ (document.getElementById('emm-edit-name'));
+    if (nameInput) nameInput.value = edit.name;
+    clearEditNameError();
+    renderGroupPicker();
+}
+
+function currentEditGroup() {
+    const edit = state.edit;
+    if (!edit) return null;
+    return settings.groups.find(item => item.id === edit.groupId) ?? null;
+}
+
+function renderBoundList(titles, host) {
+    host.textContent = '';
+    if (!titles.length) {
+        const empty = document.createElement('span');
+        empty.className = 'emm-bound-empty';
+        empty.textContent = '还没有插件，从下方列表点 + 加入';
         host.append(empty);
         return;
     }
-    const titles = getDrawers()
-        .filter(drawer => drawer.id !== 'emm-settings-drawer')
-        .map(drawer => getTitle(drawer));
-    for (const group of settings.groups) {
-        host.append(buildGroupEditorRow(group, titles));
+
+    for (const title of titles) {
+        const chip = document.createElement('span');
+        chip.className = 'emm-bound-chip';
+        chip.title = title;
+
+        const name = document.createElement('span');
+        name.className = 'emm-bound-name';
+        name.textContent = title;
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'emm-unbind-btn';
+        remove.title = '移出本分组';
+        remove.setAttribute('aria-label', `将 ${title} 移出本分组`);
+        remove.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+        remove.addEventListener('click', () => unbindTitleFromGroup(title));
+
+        chip.append(name, remove);
+        host.append(chip);
     }
+}
+
+/**
+ * Stage membership in state.edit.assign; nothing is written until Save.
+ * Bound plugins are chips; the other-groups tab shows each current owner.
+ * Every bind/unbind is confirmed and only written into the staged map.
+ */
+function renderGroupPicker() {
+    const edit = state.edit;
+    const list = document.getElementById('emm-picker-list');
+    const boundList = document.getElementById('emm-bound-list');
+    if (!edit || !list || !boundList) return;
+    if (edit.tab !== 'ungrouped' && edit.tab !== 'other') edit.tab = 'ungrouped';
+
+    for (const title of editableTitles()) {
+        if (!edit.assign.has(title)) edit.assign.set(title, findGroupForTitle(title)?.id ?? null);
+    }
+
+    const bound = [];
+    const ungrouped = [];
+    const other = [];
+    for (const [title, ownerId] of edit.assign) {
+        if (ownerId === edit.groupId) bound.push(title);
+        else if (ownerId) other.push([title, ownerId]);
+        else ungrouped.push(title);
+    }
+
+    for (const tab of document.querySelectorAll('#emm-group-edit .emm-picker-tab')) {
+        const isActive = tab.dataset.tab === edit.tab;
+        tab.classList.toggle('is-active', isActive);
+        tab.setAttribute('aria-selected', String(isActive));
+    }
+    const counts = {
+        bound: document.querySelector('#emm-group-edit [data-count="bound"]'),
+        ungrouped: document.querySelector('#emm-group-edit [data-count="ungrouped"]'),
+        other: document.querySelector('#emm-group-edit [data-count="other"]'),
+    };
+    if (counts.bound) counts.bound.textContent = String(bound.length);
+    if (counts.ungrouped) counts.ungrouped.textContent = String(ungrouped.length);
+    if (counts.other) counts.other.textContent = String(other.length);
+
+    renderBoundList(bound, boundList);
+
+    const scrollTop = list.scrollTop;
+    list.textContent = '';
+
+    const entries = edit.tab === 'other'
+        ? other
+        : ungrouped.map(title => [title, null]);
+
+    if (!entries.length) {
+        const empty = document.createElement('div');
+        empty.className = 'emm-picker-empty';
+        empty.textContent = edit.tab === 'other' ? '没有属于其他分组的插件' : '所有插件都已分组';
+        list.append(empty);
+        list.scrollTop = scrollTop;
+        return;
+    }
+
+    for (const [title, ownerId] of entries) {
+        const row = document.createElement('div');
+        row.className = 'emm-pick';
+
+        const text = document.createElement('span');
+        text.className = 'emm-pick-name';
+        text.textContent = title;
+        text.title = title;
+        row.append(text);
+
+        if (edit.tab === 'other' && ownerId) {
+            const owner = settings.groups.find(item => item.id === ownerId);
+            const badge = document.createElement('span');
+            badge.className = 'emm-pick-badge';
+            badge.textContent = owner?.name ?? '其他分组';
+            badge.title = owner?.name ?? '其他分组';
+            row.append(badge);
+        }
+
+        const bind = document.createElement('button');
+        bind.type = 'button';
+        bind.className = 'emm-bind-btn';
+        bind.title = '绑定到本分组';
+        bind.setAttribute('aria-label', `将 ${title} 绑定到本分组`);
+        bind.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+        bind.addEventListener('click', () => bindTitleToGroup(title, ownerId));
+        row.append(bind);
+
+        list.append(row);
+    }
+    list.scrollTop = scrollTop;
+}
+
+async function bindTitleToGroup(title, ownerId) {
+    const edit = state.edit;
+    const group = currentEditGroup();
+    if (!edit || !group) return;
+
+    const owner = ownerId ? settings.groups.find(item => item.id === ownerId) : null;
+    const ok = await askConfirm({
+        title: owner ? '移动插件' : '绑定插件',
+        message: owner
+            ? `将「${title}」从「${owner.name}」移动到「${group.name}」？`
+            : `将「${title}」绑定到分组「${group.name}」？`,
+        confirmText: owner ? '移动' : '绑定',
+        primary: true,
+    });
+    if (!ok || state.edit !== edit || !settings.groups.includes(group)) return;
+
+    edit.assign.set(title, group.id);
+    renderGroupPicker();
+}
+
+async function unbindTitleFromGroup(title) {
+    const edit = state.edit;
+    const group = currentEditGroup();
+    if (!edit || !group) return;
+
+    const ok = await askConfirm({
+        title: '移出插件',
+        message: `将「${title}」从「${group.name}」移出？移出后回到未分组。`,
+        confirmText: '移出',
+        danger: true,
+    });
+    if (!ok || state.edit !== edit || !settings.groups.includes(group)) return;
+
+    edit.assign.set(title, null);
+    renderGroupPicker();
+}
+
+function saveGroupEditor() {
+    const edit = state.edit;
+    if (!edit) return;
+    const group = settings.groups.find(item => item.id === edit.groupId);
+    if (!group) {
+        closeGroupEditModal();
+        return;
+    }
+
+    const nameInput = /** @type {HTMLInputElement} */ (document.getElementById('emm-edit-name'));
+    const rawName = normalize(nameInput?.value);
+    const nextName = rawName || group.name;
+    if (rawName && rawName !== group.name && groupNameExists(nextName, group.id)) {
+        showEditNameError(`已存在同名分组「${nextName}」`);
+        return;
+    }
+    group.name = nextName;
+    clearEditNameError();
+
+    // Rebuild tracked memberships; keep members whose drawers are not loaded
+    // right now instead of silently dropping them.
+    const tracked = new Set(edit.assign.keys());
+    for (const item of settings.groups) {
+        item.members = item.members.filter(title => !tracked.has(title));
+    }
+    for (const [title, ownerId] of edit.assign) {
+        if (!ownerId) continue;
+        const owner = settings.groups.find(item => item.id === ownerId);
+        if (owner && !owner.members.includes(title)) owner.members.push(title);
+    }
+
+    normalizeGroups();
+    saveSettings();
+    renderGroupEditor(true);
+    applyGrouping(true);
+    closeGroupEditModal();
+}
+
+function closeGroupEditModal() {
+    const modal = document.getElementById('emm-group-edit');
+    state.edit = null;
+    closeModalLayer(modal, syncModalLock);
+}
+
+async function requestDeleteGroup(group) {
+    const count = group.members.length;
+    const ok = await askConfirm({
+        title: '删除分组',
+        message: count > 0
+            ? `确定删除「${group.name}」？组内的 ${count} 个插件会回到未分组。`
+            : `确定删除「${group.name}」？`,
+        confirmText: '删除',
+        danger: true,
+    });
+    if (!ok) return;
+
+    settings.groups = settings.groups.filter(item => item.id !== group.id);
+    state.expandedGroups.delete(group.id);
+    if (state.edit?.groupId === group.id) closeGroupEditModal();
+    saveSettings();
+    renderGroupEditor(true);
+    applyGrouping(true);
 }
 
 function addGroup(rawName) {
     normalizeGroups();
-    const name = normalize(rawName) || `分组 ${settings.groups.length + 1}`;
-    settings.groups.push({
+    const name = normalize(rawName);
+    if (!name || groupNameExists(name)) return null;
+    const group = {
         id: `g${Date.now().toString(36)}`,
         name,
         enabled: true,
         collapsed: false,
         members: [],
-    });
+    };
+    settings.groups.push(group);
     saveSettings();
-    renderGroupEditor();
+    renderGroupEditor(true);
     applyGrouping(true);
+    return group;
+}
+
+function setFormError(element, message) {
+    if (!element) return;
+    element.textContent = message || '';
+    element.hidden = !message;
+}
+
+function setInputInvalid(input, invalid) {
+    if (!input) return;
+    input.classList.toggle('is-invalid', invalid);
+    if (invalid) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+}
+
+function showAddGroupError(message) {
+    const input = document.getElementById('emm-new-group');
+    setFormError(document.getElementById('emm-add-group-error'), message);
+    setInputInvalid(input, true);
+    input?.focus();
+    input?.select();
+}
+
+function clearAddGroupError() {
+    setFormError(document.getElementById('emm-add-group-error'), '');
+    setInputInvalid(document.getElementById('emm-new-group'), false);
+}
+
+function showEditNameError(message) {
+    const input = document.getElementById('emm-edit-name');
+    setFormError(document.getElementById('emm-edit-name-error'), message);
+    setInputInvalid(input, true);
+    input?.focus();
+    input?.select();
+}
+
+function clearEditNameError() {
+    setFormError(document.getElementById('emm-edit-name-error'), '');
+    setInputInvalid(document.getElementById('emm-edit-name'), false);
 }
 
 /* ------------------------------------------------------------------ */
@@ -724,21 +1081,20 @@ function appendSettingsDrawer() {
                 <i class="fa-solid fa-ellipsis emm-opt-icon" aria-hidden="true"></i>
                 <span>收纳顶部按钮</span>
             </label>
-            <label class="checkbox_label" for="emm-opt-hidebuiltins" title="隐藏下载扩展和资源菜单、已弃用的扩展API区块">
+            <label class="checkbox_label" for="emm-opt-hidebuiltins">
                 <input id="emm-opt-hidebuiltins" type="checkbox">
                 <i class="fa-solid fa-eye-slash emm-opt-icon" aria-hidden="true"></i>
                 <span>隐藏内置区块</span>
             </label>
+            <p class="emm-opt-desc">隐藏「下载扩展和资源菜单」与「(已弃用) 扩展API」区块。</p>
             <div class="emm-select-row">
                 <i class="fa-solid fa-tag emm-opt-icon" aria-hidden="true"></i>
                 <label for="emm-opt-labelmax">标签字数上限</label>
                 <input id="emm-opt-labelmax" class="text_pole emm-number" type="number"
                        min="2" max="30" step="1" inputmode="numeric">
             </div>
-            <div class="emm-hint">
-                点击标签跳转；✕ 单独折叠，右上角一键全部折叠。收纳后管理与安装进入 ⋯ 菜单。<br>
-                版本 ${VERSION}
-            </div>
+            <p class="emm-opt-desc">标签名超过上限时用 … 省略，悬停标签可查看完整名称。</p>
+            <div class="emm-hint">版本 ${VERSION}</div>
         </div>
     `;
     root.appendChild(drawer);
@@ -783,69 +1139,320 @@ function appendSettingsDrawer() {
     normalizeGroups();
 }
 
+function syncModalLock() {
+    const groups = document.getElementById('emm-group-modal');
+    const edit = document.getElementById('emm-group-edit');
+    const open = (groups && !groups.hidden) || (edit && !edit.hidden);
+    document.body.classList.toggle('emm-modal-open', !!open);
+}
+
+/**
+ * Animate modal layers out before applying [hidden] so closing feels
+ * deliberate. Reopening cancels a pending close.
+ */
+function openModalLayer(layer) {
+    if (!layer) return;
+    if (layer.__emmCloseTimer) {
+        clearTimeout(layer.__emmCloseTimer);
+        layer.__emmCloseTimer = 0;
+    }
+    layer.__emmCloseCallbacks = [];
+    layer.classList.remove('emm-closing');
+    layer.hidden = false;
+}
+
+function closeModalLayer(layer, done) {
+    if (!layer) {
+        done?.();
+        return;
+    }
+    if (layer.__emmCloseTimer) {
+        if (done) layer.__emmCloseCallbacks.push(done);
+        return;
+    }
+    if (layer.hidden) {
+        done?.();
+        return;
+    }
+
+    layer.__emmCloseCallbacks = done ? [done] : [];
+    layer.classList.add('emm-closing');
+    layer.__emmCloseTimer = setTimeout(() => {
+        layer.__emmCloseTimer = 0;
+        layer.hidden = true;
+        layer.classList.remove('emm-closing');
+        const callbacks = layer.__emmCloseCallbacks ?? [];
+        layer.__emmCloseCallbacks = [];
+        for (const callback of callbacks) callback();
+    }, MODAL_CLOSE_MS);
+}
+
+/**
+ * SillyTavern closes the extensions drawer on a mousedown outside the drawer.
+ * Modal layers live on <body>, so without this every click inside a dialog
+ * would count as "outside" and collapse the drawer behind it.
+ */
+function shieldDrawerEvents(element) {
+    if (!element) return;
+    for (const type of ['pointerdown', 'mousedown', 'touchstart']) {
+        element.addEventListener(type, event => event.stopPropagation());
+    }
+}
+
 function buildGroupModal() {
-    if (document.getElementById('emm-group-modal')) return;
+    if (!document.getElementById('emm-group-modal')) {
+        const modal = document.createElement('div');
+        modal.id = 'emm-group-modal';
+        modal.className = 'emm-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="emm-modal-backdrop" data-action="close"></div>
+            <div class="emm-modal-card emm-groups-card" role="dialog" aria-modal="true" aria-label="管理分组">
+                <div class="emm-modal-head">
+                    <b>管理分组</b>
+                    <button type="button" class="emm-icon-btn emm-modal-close" data-action="close" title="关闭">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="emm-modal-body">
+                    <div class="emm-add-group">
+                        <input id="emm-new-group" class="text_pole" type="text" maxlength="16"
+                               placeholder="新分组名称" aria-label="新分组名称">
+                        <button id="emm-add-group-btn" type="button" class="menu_button">添加</button>
+                    </div>
+                    <div id="emm-add-group-error" class="emm-form-error" role="alert" hidden></div>
+                    <div id="emm-group-rows"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        shieldDrawerEvents(modal);
+        modal.addEventListener('click', event => {
+            if (event.target.closest('[data-action="close"]')) closeGroupModal();
+        });
+
+        const newGroup = /** @type {HTMLInputElement} */ (document.getElementById('emm-new-group'));
+        const addButton = /** @type {HTMLButtonElement} */ (document.getElementById('emm-add-group-btn'));
+        const syncAdd = () => {
+            const ready = !!normalize(newGroup?.value ?? '');
+            if (addButton) {
+                addButton.disabled = !ready;
+                addButton.classList.toggle('emm-disabled', !ready);
+            }
+        };
+        const commitGroup = () => {
+            const name = normalize(newGroup?.value ?? '');
+            if (!name) {
+                newGroup?.focus();
+                return;
+            }
+            if (groupNameExists(name)) {
+                showAddGroupError(`已存在同名分组「${name}」`);
+                return;
+            }
+            const group = addGroup(name);
+            if (!group) {
+                showAddGroupError(`已存在同名分组「${name}」`);
+                return;
+            }
+            newGroup.value = '';
+            clearAddGroupError();
+            syncAdd();
+            openGroupEditor(group.id);
+        };
+        addButton?.addEventListener('click', commitGroup);
+        newGroup?.addEventListener('input', () => {
+            syncAdd();
+            clearAddGroupError();
+        });
+        newGroup?.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                commitGroup();
+            }
+        });
+        syncAdd();
+    }
+
+    buildGroupEditModal();
+    buildConfirmDialog();
+
+    if (!state.modalKeysBound) {
+        state.modalKeysBound = true;
+        document.addEventListener('keydown', event => {
+            if (event.key !== 'Escape') return;
+            if (state.confirm) {
+                event.preventDefault();
+                event.stopPropagation();
+                finishConfirm(false);
+                return;
+            }
+            const edit = document.getElementById('emm-group-edit');
+            if (edit && !edit.hidden) {
+                event.preventDefault();
+                event.stopPropagation();
+                closeGroupEditModal();
+                return;
+            }
+            const modal = document.getElementById('emm-group-modal');
+            if (modal && !modal.hidden) {
+                event.preventDefault();
+                event.stopPropagation();
+                closeGroupModal();
+            }
+        }, true);
+    }
+}
+
+function buildGroupEditModal() {
+    if (document.getElementById('emm-group-edit')) return;
     const modal = document.createElement('div');
-    modal.id = 'emm-group-modal';
-    modal.className = 'emm-modal';
+    modal.id = 'emm-group-edit';
+    modal.className = 'emm-modal emm-modal-stacked';
     modal.hidden = true;
     modal.innerHTML = `
-        <div class="emm-modal-backdrop" data-action="close"></div>
-        <div class="emm-modal-card" role="dialog" aria-modal="true" aria-label="管理分组">
+        <div class="emm-modal-backdrop" data-action="close-edit"></div>
+        <div class="emm-modal-card emm-edit-card" role="dialog" aria-modal="true" aria-labelledby="emm-edit-heading">
             <div class="emm-modal-head">
-                <b>管理分组</b>
-                <button type="button" class="emm-icon-btn emm-modal-close" data-action="close" title="关闭">
+                <b id="emm-edit-heading">编辑分组</b>
+                <button type="button" class="emm-icon-btn emm-modal-close" data-action="close-edit" title="关闭">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
             <div class="emm-modal-body">
-                <div class="emm-add-group">
-                    <input id="emm-new-group" class="text_pole" type="text" maxlength="16"
-                           placeholder="新分组名称" aria-label="新分组名称">
-                    <button id="emm-add-group-btn" type="button" class="menu_button">添加</button>
+                <label class="emm-field" for="emm-edit-name">
+                    <span class="emm-field-label">分组名称</span>
+                    <input id="emm-edit-name" class="text_pole" type="text" maxlength="16"
+                           placeholder="分组名称" autocomplete="off">
+                    <span id="emm-edit-name-error" class="emm-form-error" role="alert" hidden></span>
+                </label>
+                <div class="emm-bound">
+                    <div class="emm-bound-head">
+                        <span class="emm-field-label">本组插件</span>
+                        <span class="emm-pill" data-count="bound">0</span>
+                    </div>
+                    <div id="emm-bound-list" class="emm-bound-list"></div>
                 </div>
-                <div id="emm-group-rows"></div>
+                <div class="emm-picker">
+                    <div class="emm-picker-head">
+                        <span class="emm-field-label">添加插件</span>
+                        <span class="emm-picker-hint">点 + 绑定到本分组；标签上的 × 可移出</span>
+                    </div>
+                    <div class="emm-picker-tabs" role="tablist">
+                        <button type="button" class="emm-picker-tab is-active" data-tab="ungrouped" role="tab">
+                            未分组<span class="emm-pill" data-count="ungrouped">0</span>
+                        </button>
+                        <button type="button" class="emm-picker-tab" data-tab="other" role="tab">
+                            其他分组<span class="emm-pill" data-count="other">0</span>
+                        </button>
+                    </div>
+                    <div id="emm-picker-list" class="emm-picker-list" aria-label="扩展插件列表"></div>
+                </div>
+            </div>
+            <div class="emm-modal-foot">
+                <button type="button" class="menu_button" data-action="close-edit">取消</button>
+                <button type="button" class="menu_button emm-btn-primary" id="emm-edit-save">保存</button>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
+    shieldDrawerEvents(modal);
     modal.addEventListener('click', event => {
-        if (event.target.closest('[data-action="close"]')) closeGroupModal();
+        if (event.target.closest('[data-action="close-edit"]')) closeGroupEditModal();
     });
-
-    const newGroup = /** @type {HTMLInputElement} */ (document.getElementById('emm-new-group'));
-    const commitGroup = () => {
-        if (!newGroup || !normalize(newGroup.value)) return;
-        addGroup(newGroup.value);
-        newGroup.value = '';
-        newGroup.focus();
-    };
-    document.getElementById('emm-add-group-btn')?.addEventListener('click', commitGroup);
-    newGroup?.addEventListener('keydown', event => {
+    modal.querySelectorAll('.emm-picker-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            if (!state.edit) return;
+            state.edit.tab = tab.dataset.tab === 'other' ? 'other' : 'ungrouped';
+            renderGroupPicker();
+        });
+    });
+    document.getElementById('emm-edit-save')?.addEventListener('click', saveGroupEditor);
+    const nameInput = /** @type {HTMLInputElement} */ (document.getElementById('emm-edit-name'));
+    nameInput?.addEventListener('input', clearEditNameError);
+    nameInput?.addEventListener('keydown', event => {
         if (event.key === 'Enter') {
             event.preventDefault();
-            commitGroup();
+            saveGroupEditor();
         }
     });
-    document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && !modal.hidden) closeGroupModal();
+}
+
+function buildConfirmDialog() {
+    if (document.getElementById('emm-confirm')) return;
+    const layer = document.createElement('div');
+    layer.id = 'emm-confirm';
+    layer.className = 'emm-confirm';
+    layer.hidden = true;
+    layer.innerHTML = `
+        <div class="emm-confirm-backdrop" data-action="cancel"></div>
+        <div class="emm-confirm-card" role="alertdialog" aria-modal="true"
+             aria-labelledby="emm-confirm-title" aria-describedby="emm-confirm-text">
+            <div id="emm-confirm-title" class="emm-confirm-title"></div>
+            <div id="emm-confirm-text" class="emm-confirm-text"></div>
+            <div class="emm-confirm-actions">
+                <button type="button" class="menu_button" data-action="cancel">取消</button>
+                <button type="button" class="menu_button emm-btn-danger" data-action="ok">删除</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(layer);
+    shieldDrawerEvents(layer);
+    layer.addEventListener('click', event => {
+        const action = event.target.closest('[data-action]')?.dataset.action;
+        if (action === 'cancel') finishConfirm(false);
+        else if (action === 'ok') finishConfirm(true);
     });
+}
+
+function askConfirm({ title, message, confirmText = '确定', danger = false, primary = false }) {
+    buildConfirmDialog();
+    const layer = document.getElementById('emm-confirm');
+    if (!layer) return Promise.resolve(false);
+
+    return new Promise(resolve => {
+        if (state.confirm) finishConfirm(false);
+        state.confirm = { resolve };
+        const titleNode = document.getElementById('emm-confirm-title');
+        const textNode = document.getElementById('emm-confirm-text');
+        if (titleNode) titleNode.textContent = title;
+        if (textNode) textNode.textContent = message;
+        const ok = layer.querySelector('[data-action="ok"]');
+        if (ok) {
+            ok.textContent = confirmText;
+            ok.classList.toggle('emm-btn-danger', danger);
+            ok.classList.toggle('emm-btn-primary', primary && !danger);
+        }
+        layer.hidden = false;
+        setTimeout(() => layer.querySelector('[data-action="cancel"]')?.focus(), 0);
+    });
+}
+
+function finishConfirm(value) {
+    const pending = state.confirm;
+    state.confirm = null;
+    const layer = document.getElementById('emm-confirm');
+    if (layer) layer.hidden = true;
+    pending?.resolve?.(value);
 }
 
 function openGroupModal() {
     const modal = document.getElementById('emm-group-modal');
     if (!modal) return;
     normalizeGroups();
-    renderGroupEditor();
-    modal.hidden = false;
-    document.body.classList.add('emm-modal-open');
+    state.expandedGroups.clear();
+    clearAddGroupError();
+    renderGroupEditor(true);
+    openModalLayer(modal);
+    syncModalLock();
     setTimeout(() => document.getElementById('emm-new-group')?.focus(), 60);
 }
 
 function closeGroupModal() {
+    finishConfirm(false);
+    closeGroupEditModal();
     const modal = document.getElementById('emm-group-modal');
-    if (modal) modal.hidden = true;
-    document.body.classList.remove('emm-modal-open');
+    closeModalLayer(modal, syncModalLock);
 }
 
 /* ------------------------------------------------------------------ */
