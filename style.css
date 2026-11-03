@@ -1,0 +1,454 @@
+/* Extension Manager + — styles for the SillyTavern Extensions drawer. */
+
+#emm-sticky {
+    --emm-text: var(--SmartThemeBodyColor, #ddd);
+    --emm-muted: color-mix(in srgb, var(--emm-text) 55%, transparent);
+    --emm-border: color-mix(in srgb, var(--emm-text) 22%, transparent);
+    --emm-accent: var(--SmartThemeQuoteColor, #a78bfa);
+    --emm-tab-bg: color-mix(in srgb, var(--emm-text) 7%, transparent);
+    --emm-tab-hover: color-mix(in srgb, var(--emm-text) 12%, transparent);
+    --emm-tab-active: color-mix(in srgb, var(--emm-text) 15%, transparent);
+    --emm-input-bg: color-mix(in srgb, var(--emm-text) 10%, transparent);
+    --emm-popover: var(--SmartThemeBlurTintColor, #202228);
+    --emm-shadow: rgba(0, 0, 0, 0.45);
+    --emm-button-bg: color-mix(in srgb, var(--emm-text) 6%, transparent);
+
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    flex: 0 0 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-sizing: border-box;
+    padding: 4px 8px 8px;
+    margin: 0 0 6px;
+    background-color: var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94)));
+    border-bottom: 1px solid var(--emm-border);
+    box-shadow: 0 8px 16px -14px var(--emm-shadow);
+    color: var(--emm-text);
+}
+
+/* Fixed palettes are intentionally independent from the SillyTavern theme. */
+#emm-sticky.emm-theme-day {
+    color-scheme: light;
+    --emm-text: #1f2937;
+    --emm-muted: #64748b;
+    --emm-border: rgba(15, 23, 42, 0.16);
+    --emm-accent: #6d5ce7;
+    --emm-tab-bg: rgba(15, 23, 42, 0.05);
+    --emm-tab-hover: rgba(15, 23, 42, 0.09);
+    --emm-tab-active: rgba(109, 92, 231, 0.14);
+    --emm-input-bg: #ffffff;
+    --emm-popover: #ffffff;
+    --emm-shadow: rgba(15, 23, 42, 0.18);
+    --emm-button-bg: rgba(15, 23, 42, 0.05);
+    --emm-surface: #f7f9fc;
+}
+
+#emm-sticky.emm-theme-night {
+    color-scheme: dark;
+    --emm-text: #e8e8e8;
+    --emm-muted: #9b9b9b;
+    --emm-border: rgba(255, 255, 255, 0.16);
+    --emm-accent: #a78bfa;
+    --emm-tab-bg: rgba(255, 255, 255, 0.06);
+    --emm-tab-hover: rgba(255, 255, 255, 0.11);
+    --emm-tab-active: rgba(167, 139, 250, 0.18);
+    --emm-input-bg: #101112;
+    --emm-popover: #212224;
+    --emm-shadow: rgba(0, 0, 0, 0.55);
+    --emm-button-bg: rgba(255, 255, 255, 0.06);
+    --emm-surface: #191a1c;
+}
+
+/* The drawer's 10px top padding would otherwise stay above the sticky bar and
+   let scrolled content peek through. */
+#rm_extensions_block:has(#emm-sticky) {
+    padding-top: 0;
+}
+
+#emm-sticky.emm-sticky-off {
+    position: static;
+    box-shadow: none;
+}
+
+#emm-sticky [hidden] {
+    display: none !important;
+}
+
+/* Keep the native header row inside the sticky wrapper tidy. */
+#emm-sticky > .alignitemscenter {
+    width: 100%;
+    gap: 4px;
+    flex-wrap: wrap;
+    color: var(--emm-text);
+}
+
+#emm-sticky .checkbox_label {
+    color: var(--emm-text);
+}
+
+#emm-sticky h3 {
+    color: var(--emm-text);
+}
+
+.emm-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 1px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Search row                                                          */
+/* ------------------------------------------------------------------ */
+
+.emm-search-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+}
+
+.emm-search-icon {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.8);
+    color: var(--emm-muted);
+}
+
+.emm-search-input {
+    flex: 1 1 auto;
+    min-width: 60px;
+    height: 28px;
+    min-height: 28px;
+    margin: 0;
+    padding: 0 8px;
+    border: 1px solid var(--emm-border);
+    border-radius: 7px;
+    background-color: var(--emm-input-bg);
+    color: var(--emm-text);
+}
+
+/* ST applies input[type=text] { background: var(--ui-color-sec) !important }
+   with a type selector. Fixed day/night palettes must win over that rule;
+   auto mode intentionally keeps ST's native input styling. */
+#emm-sticky.emm-theme-day #emm-search.emm-search-input,
+#emm-sticky.emm-theme-night #emm-search.emm-search-input {
+    border-color: var(--emm-border) !important;
+    background-color: var(--emm-input-bg) !important;
+    color: var(--emm-text) !important;
+}
+
+.emm-search-input::placeholder {
+    color: var(--emm-muted);
+    opacity: 1;
+}
+
+#emm-sticky.emm-theme-day #emm-search.emm-search-input::placeholder,
+#emm-sticky.emm-theme-night #emm-search.emm-search-input::placeholder {
+    color: var(--emm-muted) !important;
+    opacity: 1;
+}
+
+#emm-sticky.emm-theme-day #emm-search.emm-search-input:focus,
+#emm-sticky.emm-theme-night #emm-search.emm-search-input:focus {
+    border-color: var(--emm-accent) !important;
+    outline: none;
+}
+
+.emm-count {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.72);
+    color: var(--emm-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ */
+/* Tabs row                                                            */
+/* ------------------------------------------------------------------ */
+
+.emm-tabs-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
+}
+
+.emm-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--emm-border) transparent;
+}
+
+.emm-tabs::-webkit-scrollbar {
+    height: 4px;
+}
+
+.emm-tabs::-webkit-scrollbar-thumb {
+    background: var(--emm-border);
+    border-radius: 4px;
+}
+
+.emm-tabs::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.emm-tabs-empty {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-left: 2px;
+    font-size: calc(var(--mainFontSize) * 0.78);
+    color: var(--emm-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.emm-tabs:empty {
+    display: none;
+}
+
+.emm-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+    max-width: 170px;
+    padding: 3px 5px 3px 9px;
+    border-radius: 8px;
+    border: 1px solid var(--emm-border);
+    background: var(--emm-tab-bg);
+    color: var(--emm-text);
+    font-family: inherit;
+    font-size: calc(var(--mainFontSize) * 0.8);
+    line-height: 1.25;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.emm-tab:hover {
+    background: var(--emm-tab-hover);
+}
+
+.emm-tab.active {
+    border-color: var(--emm-accent);
+    background: var(--emm-tab-active);
+    box-shadow: inset 0 0 0 1px var(--emm-accent);
+}
+
+.emm-tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.emm-tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    opacity: 0.55;
+    font-size: 0.85em;
+}
+
+.emm-tab-close:hover {
+    opacity: 1;
+    background: var(--emm-tab-hover);
+}
+
+/* ------------------------------------------------------------------ */
+/* Buttons                                                             */
+/* ------------------------------------------------------------------ */
+
+.emm-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0;
+    margin: 0;
+}
+
+#emm-sticky .emm-icon-btn,
+#emm-sticky .emm-kebab {
+    color: var(--emm-text);
+    background: var(--emm-button-bg);
+}
+
+#emm-sticky .emm-icon-btn:hover,
+#emm-sticky .emm-kebab:hover {
+    background: var(--emm-tab-hover);
+}
+
+.emm-icon-btn.emm-disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+#emm-search-clear {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+}
+
+/* ------------------------------------------------------------------ */
+/* ⋯ dropdown                                                          */
+/* ------------------------------------------------------------------ */
+
+#rm_extensions_block.emm-compact #extensions_details,
+#rm_extensions_block.emm-compact #third_party_extension_button {
+    display: none !important;
+}
+
+.emm-menu-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.emm-kebab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    margin-left: 2px;
+}
+
+.emm-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 180px;
+    padding: 5px;
+    border-radius: 10px;
+    border: 1px solid var(--emm-border);
+    background: var(--emm-popover);
+    color: var(--emm-text);
+    box-shadow: 0 12px 30px var(--emm-shadow);
+    backdrop-filter: blur(12px);
+}
+
+.emm-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--emm-text);
+    font-family: inherit;
+    font-size: calc(var(--mainFontSize) * 0.85);
+    text-align: left;
+    cursor: pointer;
+}
+
+.emm-menu-item:hover {
+    background: var(--emm-tab-hover);
+}
+
+.emm-menu-item i {
+    width: 16px;
+    text-align: center;
+    opacity: 0.8;
+}
+
+.emm-menu-sep {
+    height: 1px;
+    margin: 3px 4px;
+    background: var(--emm-border);
+    opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------ */
+/* Search results                                                      */
+/* ------------------------------------------------------------------ */
+
+#rm_extensions_block .emm-filtered {
+    display: none !important;
+}
+
+.emm-no-results {
+    padding: 6px 4px;
+    font-size: calc(var(--mainFontSize) * 0.82);
+    color: var(--emm-muted);
+    text-align: center;
+}
+
+/* ------------------------------------------------------------------ */
+/* Own settings drawer                                                 */
+/* ------------------------------------------------------------------ */
+
+#emm-settings-drawer .inline-drawer-content {
+    padding: 4px 8px 8px;
+}
+
+#emm-settings-drawer .checkbox_label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 4px 0;
+    cursor: pointer;
+}
+
+#emm-settings-drawer .checkbox_label input[type="checkbox"] {
+    margin-right: 0;
+}
+
+#emm-settings-drawer .emm-select-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin: 2px 0 8px;
+}
+
+#emm-settings-drawer .emm-select-row label {
+    flex: 1 1 auto;
+    white-space: nowrap;
+}
+
+#emm-settings-drawer .emm-theme-select {
+    flex: 1 1 100%;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    padding: 0 6px;
+}
+
+#emm-settings-drawer .emm-opt-icon {
+    width: 12px;
+    flex: 0 0 12px;
+    text-align: center;
+    font-size: calc(var(--mainFontSize) * 0.72);
+    opacity: 0.6;
+}
+
+#emm-settings-drawer .emm-hint {
+    margin-top: 5px;
+    font-size: calc(var(--mainFontSize) * 0.72);
+    line-height: 1.35;
+    opacity: 0.55;
+}
