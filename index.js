@@ -44,6 +44,7 @@ const state = {
     spyLocked: false,
     groupSignature: '',
     origin: new Map(),
+    groupingReady: false,
 };
 
 const ui = {};
@@ -376,6 +377,7 @@ function teardownGrouping() {
     setNativeRootsHidden(false);
 }
 function applyGrouping(force = false) {
+    if (settings.grouping && !state.groupingReady) return;
     if (!settings.grouping) {
         if (document.getElementById('emm-groups') || state.origin.size) teardownGrouping();
         return;
@@ -1210,6 +1212,7 @@ function bindUi() {
     });
 
     ui.groupingToggle?.addEventListener('change', () => {
+        state.groupingReady = true;
         settings.grouping = ui.groupingToggle.checked;
         saveSettings();
         if (settings.grouping) normalizeGroups();
@@ -1323,6 +1326,21 @@ function init() {
     bindUi();
     updateLayout();
     refresh();
+
+    if (settings.grouping) {
+        // Some extensions (e.g. the MVU variable framework) inject their
+        // settings drawer several seconds after boot and look up an existing
+        // drawer as an anchor. Grouping empties that container, so wait for
+        // those late drawers before the first regroup.
+        state.groupingReady = false;
+        setTimeout(() => {
+            state.groupingReady = true;
+            applyGrouping(true);
+        }, 4000);
+    } else {
+        state.groupingReady = true;
+    }
+
     console.log(`[${MODULE_NAME}] ready (v${VERSION})`);
     return true;
 }
