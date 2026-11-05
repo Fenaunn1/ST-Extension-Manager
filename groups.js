@@ -1,0 +1,387 @@
+/**
+ * Extension Manager — Group state
+ *
+ * Normalisation and one-time migration of member keys, the grouped rendering pass, and
+ * the collapsed/enabled bookkeeping shared by the toolbar and the management dialog.
+ */
+
+import { ensureGroupHost, isBuiltinHidden } from './builtins.js';
+import { UNGROUPED_ID, normalize, saveSettings, settings, state } from './core.js';
+import { drawerKey, getDrawers, getTitle, setNativeRootsHidden, titleKeyMap } from './dom.js';
+import { renderGroupEditor } from './group-editor.js';
+
+const KEY_PREFIX = /^(id|i18n|title):/;
+
+function normalizeGroups() {
+    if (!Array.isArray(settings.groups)) settings.groups = [];
+    const seen = new Set();
+    settings.groups = settings.groups
+        .filter(group => group && typeof group === 'object')
+        .map((group, index) => {
+            let id = String(group.id || `g${index + 1}`);
+            while (seen.has(id)) id = `${id}x`;
+            seen.add(id);
+            return {
+                id,
+                name: normalize(group.name) || `分组 ${index + 1}`,
+                enabled: group.enabled !== false,
+                collapsed: !!group.collapsed,
+                members: Array.isArray(group.members) ? group.members.map(String) : [],
+            };
+        });
+
+    // Groups used to store drawer titles. Convert those to stable keys once;
+    // a title that no drawer matches right now becomes a title key so it still
+    // resolves if that extension loads later.
+    const byTitle = titleKeyMap();
+    for (const group of settings.groups) {
+        group.members = group.members.map(member => {
+            if (KEY_PREFIX.test(member)) return member;
+            return byTitle.get(member) ?? `title:${member}`;
+        });
+    }
+
+    const claimed = new Set();
+    for (const group of settings.groups) {
+        group.members = group.members.filter(key => {
+            if (claimed.has(key)) return false;
+            claimed.add(key);
+            return true;
+        });
+    }
+}
+
+function findGroupForKey(key) {
+    return settings.groups.find(group => group.members.includes(key)) ?? null;
+}
+
+function groupNameExists(name, exceptId = null) {
+    const target = normalize(name).toLowerCase();
+    if (!target) return false;
+    return settings.groups.some(group => group.id !== exceptId
+        && normalize(group.name).toLowerCase() === target);
+}
+
+function groupSignature() {
+    const titles = getDrawers().map(drawer => drawerKey(drawer)).join('\u0001');
+    const groups = settings.groups
+        .map(group => [group.id, group.enabled ? 1 : 0, group.name, group.members.join(',')].join(':'))
+        .join('\u0002');
+    return `${titles}\u0003${groups}`;
+}
+
+function buildGroupSection(group, drawers) {
+    const section = document.createElement('section');
+    section.className = 'emm-group';
+    section.dataset.groupId = group.id;
+
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'emm-group-head';
+    head.innerHTML = `
+        <i class="fa-solid fa-chevron-down emm-group-caret" aria-hidden="true"></i>
+        <span class="emm-group-name"></span>
+        <span class="emm-group-count"></span>
+        <span class="emm-group-spacer"></span>
+    `;
+    head.querySelector('.emm-group-name').textContent = group.name;
+    head.querySelector('.emm-group-count').textContent = String(drawers.length);
+    head.setAttribute('aria-expanded', String(!group.collapsed));
+    head.addEventListener('click', () => {
+        const collapsed = section.classList.toggle('emm-collapsed');
+        head.setAttribute('aria-expanded', String(!collapsed));
+        if (group.id === UNGROUPED_ID) {
+            settings.ungroupedCollapsed = collapsed;
+        } else {
+            group.collapsed = collapsed;
+        }
+        saveSettings();
+    });
+
+    const body = document.createElement('div');
+    body.className = 'emm-group-body';
+    const split = Math.ceil(drawers.length / 2);
+    for (const slice of [drawers.slice(0, split), drawers.slice(split)]) {
+        const column = document.createElement('div');
+        column.className = 'emm-group-col';
+        column.append(...slice);
+        body.append(column);
+    }
+
+    if (group.collapsed) section.classList.add('emm-collapsed');
+    section.append(head, body);
+    return section;
+}
+
+/**
+ * Decorative title row above the grouped list: a bold "分组列表" label on the
+ * left and one-click expand / collapse controls on the right.
+ */
+function buildGroupsHeader() {
+    const head = document.createElement('div');
+    head.className = 'emm-groups-head';
+    head.id = 'emm-groups-head';
+
+    const title = document.createElement('span');
+    title.className = 'emm-groups-title';
+    title.textContent = '分组列表';
+
+    const actions = document.createElement('div');
+    actions.className = 'emm-groups-actions';
+
+    const expand = document.createElement('button');
+    expand.type = 'button';
+    expand.className = 'menu_button emm-groups-btn';
+    expand.title = '一键展开全部分组';
+    expand.setAttribute('aria-label', '一键展开全部分组');
+    expand.innerHTML = '<i class="fa-solid fa-angles-down" aria-hidden="true"></i>';
+    expand.addEventListener('click', () => setAllGroupsCollapsed(false));
+
+    const collapse = document.createElement('button');
+    collapse.type = 'button';
+    collapse.className = 'menu_button emm-groups-btn';
+    collapse.title = '一键折叠全部分组';
+    collapse.setAttribute('aria-label', '一键折叠全部分组');
+    collapse.innerHTML = '<i class="fa-solid fa-angles-up" aria-hidden="true"></i>';
+    collapse.addEventListener('click', () => setAllGroupsCollapsed(true));
+
+    actions.append(expand, collapse);
+    head.append(title, actions);
+    return head;
+}
+
+/**
+ * Keeps the "分组列表" title row docked directly under the tab strip inside the
+ * sticky bar, so it stays visible while the list scrolls. The row lives outside
+ * the scrolling list; its height is fixed so tabs (and their scrollbar) can
+ * never squeeze it.
+ */
+function syncGroupsHeader() {
+    const sticky = document.getElementById('emm-sticky');
+    if (!sticky) return;
+    let head = document.getElementById('emm-groups-head');
+    if (!head) {
+        head = buildGroupsHeader();
+        head.id = 'emm-groups-head';
+    }
+    // The tab strip may sit directly in the sticky bar or one level deep inside
+    // #emm-toolbar; dock right below whichever element actually holds it.
+    const tabsRow = document.getElementById('emm-tabs-row');
+    let anchor = null;
+    if (tabsRow) {
+        if (tabsRow.parentElement === sticky) anchor = tabsRow;
+        else if (tabsRow.parentElement?.parentElement === sticky) anchor = tabsRow.parentElement;
+    }
+    if (anchor) {
+        if (head.previousElementSibling !== anchor) anchor.after(head);
+    } else if (head.parentElement !== sticky) {
+        sticky.append(head);
+    }
+    head.hidden = !settings.grouping;
+}
+
+function setAllGroupsCollapsed(collapsed) {
+    const wrap = document.getElementById('emm-groups');
+    if (!wrap) return;
+    for (const group of settings.groups) group.collapsed = collapsed;
+    settings.ungroupedCollapsed = collapsed;
+    saveSettings();
+    for (const section of wrap.querySelectorAll('.emm-group')) {
+        section.classList.toggle('emm-collapsed', collapsed);
+        section.querySelector('.emm-group-head')?.setAttribute('aria-expanded', String(!collapsed));
+    }
+}
+
+function renderGrouped() {
+    const wrap = ensureGroupHost();
+    if (!wrap) return;
+
+    const all = getDrawers();
+    const keys = new Map(all.map(drawer => [drawer, drawerKey(drawer)]));
+    if (!state.baseOrder) state.baseOrder = new Map();
+    let seq = state.baseOrder.size;
+    for (const drawer of all) {
+        if (!state.baseOrder.has(drawer)) state.baseOrder.set(drawer, seq++);
+        if (!state.origin.has(drawer)) {
+            state.origin.set(drawer, { parent: drawer.parentElement, next: drawer.nextElementSibling });
+        }
+    }
+    all.sort((a, b) => (state.baseOrder.get(a) ?? 0) - (state.baseOrder.get(b) ?? 0));
+
+    const buckets = new Map(settings.groups.map(group => [group.id, []]));
+    const ungrouped = [];
+    const hidden = [];
+    for (const drawer of all) {
+        if (drawer.id === 'emm-settings-drawer') {
+            ungrouped.push(drawer);
+            continue;
+        }
+        const group = findGroupForKey(keys.get(drawer));
+        if (group && group.enabled) {
+            buckets.get(group.id).push(drawer);
+        } else if (group && !group.enabled) {
+            hidden.push(drawer);
+        } else {
+            ungrouped.push(drawer);
+        }
+    }
+
+    setNativeRootsHidden(false);
+
+    // Preserve drawers that are not part of the tracked set (for example a
+    // wrapper that appeared while a group was collapsed) instead of dropping
+    // them when the container is rebuilt.
+    const known = new Set(all);
+    const orphans = [];
+    for (const drawer of wrap.querySelectorAll('.inline-drawer')) {
+        if (drawer.parentElement?.closest('.inline-drawer')) continue;
+        if (!known.has(drawer)) orphans.push(drawer);
+    }
+    wrap.textContent = '';
+
+    for (const group of settings.groups) {
+        const members = buckets.get(group.id);
+        if (!members?.length) continue;
+        // Membership order is user-defined (drag to reorder) and falls back to
+        // the order the drawers appeared in.
+        members.sort((a, b) => {
+            const rank = member => {
+                const index = group.members.indexOf(keys.get(member));
+                return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+            };
+            return rank(a) - rank(b);
+        });
+        wrap.append(buildGroupSection(group, members));
+    }
+
+    if (ungrouped.length) {
+        const section = buildGroupSection(
+            { id: UNGROUPED_ID, name: '未分组', collapsed: !!settings.ungroupedCollapsed },
+            ungrouped,
+        );
+        wrap.append(section);
+    }
+
+    if (hidden.length) {
+        const stash = document.createElement('div');
+        stash.id = 'emm-groups-hidden';
+        stash.hidden = true;
+        stash.append(...hidden);
+        wrap.append(stash);
+    }
+
+    const lost = [...state.origin.keys()].filter(drawer => !drawer.isConnected && !orphans.includes(drawer));
+    if (orphans.length || lost.length) {
+        for (const drawer of [...orphans, ...lost]) {
+            if (!state.origin.has(drawer)) {
+                state.origin.set(drawer, { parent: null, next: null });
+            }
+        }
+        const stash = document.createElement('div');
+        stash.id = 'emm-groups-orphans';
+        stash.hidden = true;
+        stash.append(...orphans, ...lost);
+        wrap.append(stash);
+    }
+
+    updateGroupVisibility();
+
+    if (document.getElementById('emm-group-rows')) renderGroupEditor();
+}
+
+function teardownGrouping() {
+    const wrap = document.getElementById('emm-groups');
+    const entries = [...state.origin.entries()];
+    for (let index = entries.length - 1; index >= 0; index--) {
+        const [drawer, origin] = entries[index];
+        if (!drawer.isConnected) continue;
+        if (!origin.parent?.isConnected) {
+            document.querySelector('#extensions_settings')?.append(drawer);
+            continue;
+        }
+        const anchor = origin.next?.parentNode === origin.parent ? origin.next : null;
+        origin.parent.insertBefore(drawer, anchor);
+    }
+    state.origin.clear();
+    state.baseOrder = null;
+    state.groupSignature = '';
+    wrap?.remove();
+    setNativeRootsHidden(false);
+    syncGroupsHeader();
+}
+function applyGrouping(force = false) {
+    syncGroupsHeader();
+    if (settings.grouping && !state.groupingReady) return;
+    if (!settings.grouping) {
+        if (document.getElementById('emm-groups') || state.origin.size) teardownGrouping();
+        return;
+    }
+    const signature = groupSignature();
+    if (!force && signature === state.groupSignature && document.getElementById('emm-groups')) {
+        updateGroupVisibility();
+        return;
+    }
+    state.groupSignature = signature;
+    renderGrouped();
+}
+
+function updateGroupVisibility() {
+    const wrap = document.getElementById('emm-groups');
+    if (!wrap) return;
+    wrap.classList.toggle('emm-searching', !!state.filter.trim());
+    if (!settings.grouping) return;
+    for (const section of wrap.querySelectorAll('.emm-group')) {
+        const drawers = [...section.querySelectorAll('.inline-drawer')]
+            .filter(drawer => !drawer.parentElement.closest('.inline-drawer'));
+        const visible = drawers.filter(drawer => !drawer.classList.contains('emm-filtered')
+            && !isBuiltinHidden(drawer));
+        section.hidden = visible.length === 0;
+        const count = section.querySelector('.emm-group-count');
+        if (count) count.textContent = String(visible.length);
+    }
+}
+
+/** Groupable drawers as { key, title } pairs, one entry per stable key. */
+function editablePlugins() {
+    const seen = new Set();
+    const plugins = [];
+    for (const drawer of getDrawers()) {
+        if (drawer.id === 'emm-settings-drawer') continue;
+        // Built-in sections are not extensions and cannot be grouped.
+        if (drawer.dataset.emmBuiltin === 'assets' || drawer.closest('#assets_container')) continue;
+        const key = drawerKey(drawer);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        plugins.push({ key, title: getTitle(drawer) });
+    }
+    return plugins;
+}
+
+function editableTitles() {
+    return editablePlugins().map(plugin => plugin.title);
+}
+
+function groupEditorSignature() {
+    return settings.groups
+        .map(group => [group.id, group.name, group.enabled ? 1 : 0, group.members.join('\u0001')].join('\u0002'))
+        .join('\u0003');
+}
+
+export {
+    KEY_PREFIX,
+    applyGrouping,
+    buildGroupSection,
+    buildGroupsHeader,
+    editablePlugins,
+    editableTitles,
+    findGroupForKey,
+    groupEditorSignature,
+    groupNameExists,
+    groupSignature,
+    normalizeGroups,
+    renderGrouped,
+    setAllGroupsCollapsed,
+    syncGroupsHeader,
+    teardownGrouping,
+    updateGroupVisibility,
+};
