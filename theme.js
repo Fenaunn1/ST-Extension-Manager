@@ -6,7 +6,7 @@
  */
 
 import { applyBuiltinVisibility } from './builtins.js';
-import { settings, state, ui } from './core.js';
+import { OPTION_INPUTS, settings, state, ui } from './core.js';
 import { clampLabelMax } from './dom.js';
 import { applyGrouping } from './groups.js';
 
@@ -46,12 +46,7 @@ function updateLayout() {
     applyThemeMode();
     applyBuiltinVisibility();
 
-    for (const [id, key] of [
-        ['emm-opt-compact', 'compactActions'],
-        ['emm-opt-search', 'showSearch'],
-        ['emm-opt-hidebuiltins', 'hideBuiltins'],
-        ['emm-opt-bleed', 'barFullBleed'],
-    ]) {
+    for (const [id, key] of OPTION_INPUTS) {
         const input = /** @type {HTMLInputElement} */ (document.getElementById(id));
         if (input) input.checked = !!settings[key];
     }

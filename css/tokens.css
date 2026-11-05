@@ -1,0 +1,130 @@
+/* 设计令牌、吸顶栏外壳与主题调色板
+   由 style.css 通过 @import 引入，顺序即层叠顺序。 */
+
+/* Extension Manager + — styles for the SillyTavern Extensions drawer. */
+
+#emm-sticky {
+    --emm-text: var(--SmartThemeBodyColor, #ddd);
+    --emm-muted: color-mix(in srgb, var(--emm-text) 55%, transparent);
+    --emm-border: color-mix(in srgb, var(--emm-text) 22%, transparent);
+    --emm-accent: var(--SmartThemeQuoteColor, #a78bfa);
+    --emm-tab-bg: color-mix(in srgb, var(--emm-text) 7%, transparent);
+    --emm-tab-hover: color-mix(in srgb, var(--emm-text) 12%, transparent);
+    --emm-tab-active: color-mix(in srgb, var(--emm-text) 15%, transparent);
+    --emm-input-bg: color-mix(in srgb, var(--emm-text) 10%, transparent);
+    --emm-popover: var(--SmartThemeBlurTintColor, #202228);
+    --emm-shadow: rgba(0, 0, 0, 0.45);
+    --emm-button-bg: color-mix(in srgb, var(--emm-text) 6%, transparent);
+
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-sizing: border-box;
+    /* The box never grows past the drawer's content column: the surface is
+       painted by ::before, and the optional edge-to-edge version adds paint
+       only (box-shadow), so no theme can be pushed into a horizontal
+       scrollbar or an extra hairline. */
+    flex: 0 0 100%;
+    width: 100%;
+    /* Side padding keeps the bar's contents off the drawer edge when the
+       edge-to-edge paint is off; the paint itself is a shadow, so this does
+       not change the box width. */
+    padding: 4px 8px 8px;
+    margin: 0 0 6px;
+    background: none;
+    color: var(--emm-text);
+}
+
+/* Optional edge-to-edge surface: a shadow is pure paint, so it stretches the
+   background over the drawer's side padding without changing any box size,
+   scroll width, or where the hairline ends. */
+#emm-sticky.emm-bar-full {
+    /* Paint outwards by the sticky bar's own side padding plus a few spare
+       pixels, and let the drawer clip the rest: the surface reaches the
+       drawer edge without changing any box size. */
+    box-shadow:
+        -30px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94))),
+        30px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94)));
+}
+
+/* Surface layer. It matches the bar's own box exactly, so the hairline can
+   never stick out past the painted background (that stray line is what made
+   some themes look like they grew an underline). */
+#emm-sticky::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94)));
+    border-bottom: 1px solid var(--emm-border);
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* Fixed palettes are intentionally independent from the SillyTavern theme. */
+#emm-sticky.emm-theme-day {
+    color-scheme: light;
+    --emm-text: #1f2937;
+    --emm-muted: #64748b;
+    --emm-border: rgba(15, 23, 42, 0.16);
+    --emm-accent: #6d5ce7;
+    --emm-tab-bg: rgba(15, 23, 42, 0.05);
+    --emm-tab-hover: rgba(15, 23, 42, 0.09);
+    --emm-tab-active: rgba(109, 92, 231, 0.14);
+    --emm-input-bg: #ffffff;
+    --emm-popover: #ffffff;
+    --emm-shadow: rgba(15, 23, 42, 0.18);
+    --emm-button-bg: rgba(15, 23, 42, 0.05);
+    --emm-surface: #f7f9fc;
+}
+
+#emm-sticky.emm-theme-night {
+    color-scheme: dark;
+    --emm-text: #e8e8e8;
+    --emm-muted: #9b9b9b;
+    --emm-border: rgba(255, 255, 255, 0.16);
+    --emm-accent: #a78bfa;
+    --emm-tab-bg: rgba(255, 255, 255, 0.06);
+    --emm-tab-hover: rgba(255, 255, 255, 0.11);
+    --emm-tab-active: rgba(167, 139, 250, 0.18);
+    --emm-input-bg: #101112;
+    --emm-popover: #212224;
+    --emm-shadow: rgba(0, 0, 0, 0.55);
+    --emm-button-bg: rgba(255, 255, 255, 0.06);
+    --emm-surface: #191a1c;
+}
+
+/* The drawer's 10px top padding would otherwise stay above the sticky bar and
+   let scrolled content peek through. */
+#rm_extensions_block:has(#emm-sticky) {
+    padding-top: 0;
+}
+
+#emm-sticky [hidden] {
+    display: none !important;
+}
+
+/* Keep the native header row inside the sticky wrapper tidy. */
+#emm-sticky > .alignitemscenter {
+    width: 100%;
+    gap: 4px;
+    flex-wrap: wrap;
+    color: var(--emm-text);
+}
+
+#emm-sticky .checkbox_label {
+    color: var(--emm-text);
+}
+
+#emm-sticky h3 {
+    color: var(--emm-text);
+}
+
+.emm-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 1px;
+}

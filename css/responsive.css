@@ -1,0 +1,55 @@
+/* 窄屏整屏弹窗
+   由 style.css 通过 @import 引入，顺序即层叠顺序。 */
+
+
+/* Phones: dialogs take the whole screen instead of floating in it. */
+
+@media (max-width: 640px) {
+    body.emm-modal-open {
+        overflow: hidden;
+    }
+
+    .emm-modal {
+        padding: 0;
+        align-items: stretch;
+    }
+
+    .emm-modal-card,
+    .emm-modal-card.emm-groups-card,
+    .emm-modal-card.emm-edit-card {
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        max-height: 100%;
+        border: 0;
+        border-radius: 0;
+    }
+
+    .emm-modal-head {
+        padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+    }
+
+    .emm-modal-body {
+        padding: 12px 14px 16px;
+    }
+
+    .emm-modal-foot {
+        padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .emm-edit-card .emm-modal-body {
+        padding: 12px 14px 16px;
+    }
+
+    .emm-modal-foot .menu_button {
+        flex: 1 1 0;
+    }
+
+    .emm-confirm {
+        padding: 20px;
+    }
+
+    .emm-confirm-card {
+        width: 100%;
+    }
+}

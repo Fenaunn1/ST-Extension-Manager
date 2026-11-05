@@ -1,0 +1,475 @@
+/* 编辑分组弹窗与二次确认框
+   由 style.css 通过 @import 引入，顺序即层叠顺序。 */
+
+/* Edit group dialog -------------------------------------------------- */
+
+.emm-modal-stacked {
+    z-index: 100000;
+}
+
+.emm-modal-card.emm-groups-card,
+.emm-modal-card.emm-edit-card {
+    height: min(560px, 100%);
+}
+
+.emm-edit-card {
+    width: min(560px, 100%);
+}
+
+.emm-edit-card .emm-modal-body {
+    gap: 14px;
+    padding: 14px;
+}
+
+/* Label above its control, and heading above the bound list. */
+.emm-field,
+.emm-bound {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.emm-field-label {
+    color: var(--emm-m-muted);
+    font-size: calc(var(--mainFontSize) * 0.76);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.emm-field input {
+    height: 34px;
+    min-height: 34px;
+    margin: 0;
+    padding: 0 10px;
+    border-radius: 9px;
+}
+
+.emm-form-error {
+    display: block;
+    margin: -2px 0 0;
+    color: #e5484d;
+    font-size: calc(var(--mainFontSize) * 0.74);
+    line-height: 1.4;
+}
+
+.emm-form-error[hidden] {
+    display: none !important;
+}
+
+.emm-modal .emm-add-group + .emm-form-error {
+    margin-top: -6px;
+}
+
+.emm-modal .emm-add-group input.is-invalid,
+.emm-field input.is-invalid {
+    border-color: #e5484d !important;
+    box-shadow: 0 0 0 1px color-mix(in srgb, #e5484d 32%, transparent) !important;
+}
+
+.emm-bound-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+/* States the rule in words and the order is still visible in the rows below;
+   a lone grip glyph with no label made the affordance ambiguous. */
+.emm-bound-hint {
+    flex: 1 1 100%;
+    color: var(--emm-m-muted);
+    font-size: calc(var(--mainFontSize) * 0.7);
+    line-height: 1.45;
+}
+
+/* One row per member: a wrapped chip cloud loses the order as soon as a group
+   holds more than a handful of plugins, and vertical rows reorder predictably. */
+.emm-bound-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 188px;
+    padding: 4px;
+    border: 1px solid var(--emm-m-border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--emm-m-text) 3%, transparent);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--emm-m-text) 22%, transparent) transparent;
+}
+
+.emm-bound-list.is-empty {
+    border-style: dashed;
+}
+
+.emm-bound-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 6px 6px 8px;
+    border-radius: 7px;
+    background: var(--emm-m-tint-strong);
+    font-size: calc(var(--mainFontSize) * 0.82);
+    line-height: 1.5;
+    cursor: grab;
+    transition: opacity 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.emm-bound-row:hover {
+    background: color-mix(in srgb, var(--emm-m-text) 16%, transparent);
+}
+
+.emm-bound-row:focus-visible {
+    outline: 2px solid var(--emm-m-accent);
+    outline-offset: -1px;
+}
+
+.emm-bound-row.is-dragging {
+    opacity: 0.4;
+}
+
+.emm-bound-grip {
+    flex: 0 0 auto;
+    color: var(--emm-m-muted);
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.emm-bound-index {
+    flex: 0 0 16px;
+    color: var(--emm-m-muted);
+    font-size: 0.82em;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.emm-bound-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.emm-unbind-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    opacity: 0.55;
+    cursor: pointer;
+    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.emm-unbind-btn:hover {
+    opacity: 1;
+    color: #e5484d;
+    background: color-mix(in srgb, #e5484d 14%, transparent);
+}
+
+.emm-unbind-btn:focus-visible,
+.emm-bind-btn:focus-visible {
+    outline: 2px solid var(--emm-m-accent);
+    outline-offset: 1px;
+}
+
+.emm-bound-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 10px;
+    color: var(--emm-m-muted);
+    font-size: calc(var(--mainFontSize) * 0.76);
+    text-align: center;
+}
+
+.emm-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.emm-picker-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.emm-picker-hint {
+    color: var(--emm-m-muted);
+    font-size: calc(var(--mainFontSize) * 0.7);
+}
+
+
+.emm-picker-tabs {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--emm-m-tint);
+}
+
+.emm-picker-tab {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 30px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--emm-m-muted);
+    font-family: inherit;
+    font-size: calc(var(--mainFontSize) * 0.82);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.emm-picker-tab:hover {
+    color: var(--emm-m-text);
+}
+
+.emm-picker-tab.is-active {
+    background: color-mix(in srgb, var(--emm-m-accent) 16%, transparent);
+    color: var(--emm-m-text);
+}
+
+.emm-pill {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--emm-m-text) 12%, transparent);
+    font-size: 0.72em;
+    line-height: 16px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.emm-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px;
+    border: 1px solid var(--emm-m-border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--emm-m-text) 3%, transparent);
+}
+
+.emm-pick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 7px 6px 9px;
+    border-radius: 7px;
+}
+
+.emm-pick:hover {
+    background: var(--emm-m-tint-strong);
+}
+
+.emm-bind-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--emm-m-accent) 12%, transparent);
+    color: var(--emm-m-accent);
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.emm-bind-btn:hover {
+    background: color-mix(in srgb, var(--emm-m-accent) 24%, transparent);
+}
+
+.emm-pick-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: calc(var(--mainFontSize) * 0.84);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.emm-pick-badge {
+    flex: 0 0 auto;
+    max-width: 120px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--emm-m-tint-strong);
+    color: var(--emm-m-muted);
+    font-size: calc(var(--mainFontSize) * 0.7);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.emm-picker-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 96px;
+    padding: 12px;
+    color: var(--emm-m-muted);
+    font-size: calc(var(--mainFontSize) * 0.78);
+    text-align: center;
+}
+
+.emm-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--emm-m-border);
+}
+
+/* One metric for every dialog action, in the modal footers and in the confirm
+   bar alike. */
+.emm-modal-foot .menu_button,
+.emm-confirm-actions .menu_button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 76px;
+    height: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 12px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+/* Leading glyphs on the footer actions are nudges, not signals: keep them muted
+   so the label still reads first. */
+.emm-modal-foot .menu_button > i:first-child {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.84);
+    opacity: 0.72;
+}
+
+/* Backup actions keep the same right-hand anchor as other footers. */
+.emm-groups-foot {
+    justify-content: flex-end;
+}
+
+.emm-groups-foot .menu_button {
+    min-width: 0;
+    opacity: 0.78;
+}
+
+.emm-groups-foot .menu_button:hover {
+    opacity: 1;
+}
+
+.emm-modal .emm-btn-primary,
+.emm-confirm .emm-btn-primary {
+    background: color-mix(in srgb, var(--emm-m-accent) 26%, transparent);
+    border-color: color-mix(in srgb, var(--emm-m-accent) 55%, transparent);
+    color: var(--emm-m-text);
+    font-weight: 600;
+}
+
+.emm-modal .emm-btn-primary:hover,
+.emm-confirm .emm-btn-primary:hover {
+    background: color-mix(in srgb, var(--emm-m-accent) 36%, transparent);
+}
+
+.emm-modal .emm-add-group .menu_button[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Confirm dialog ----------------------------------------------------- */
+
+.emm-confirm[hidden] {
+    display: none !important;
+}
+
+/* Sits above a modal, so a confirm can be raised from inside one. */
+.emm-confirm {
+    z-index: 100010;
+    padding: 16px;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+.emm-confirm-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(3px);
+}
+
+.emm-confirm-card {
+    --emm-m-accent: var(--SmartThemeQuoteColor, #a78bfa);
+    --emm-m-text: var(--SmartThemeBodyColor, #ddd);
+
+    position: relative;
+    z-index: 1;
+    width: min(360px, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 16px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.35));
+    border-radius: 14px;
+    background: var(--SmartThemeBlurTintColor, #202228);
+    color: var(--SmartThemeBodyColor, #ddd);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+}
+
+.emm-confirm-title {
+    margin-bottom: 6px;
+    font-size: calc(var(--mainFontSize) * 0.95);
+    font-weight: 700;
+}
+
+.emm-confirm-text {
+    font-size: calc(var(--mainFontSize) * 0.82);
+    line-height: 1.5;
+    opacity: 0.8;
+}
+
+.emm-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.emm-confirm-actions .menu_button {
+    flex: 0 0 auto;
+}
+
+.emm-modal .emm-btn-danger,
+.emm-confirm .emm-btn-danger {
+    background: #e5484d;
+    border-color: #e5484d;
+    color: #fff;
+    font-weight: 600;
+}
+
+.emm-modal .emm-btn-danger:hover,
+.emm-confirm .emm-btn-danger:hover {
+    background: #d93a3f;
+    border-color: #d93a3f;
+}

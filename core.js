@@ -11,7 +11,7 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.3.11';
+const VERSION = '1.3.12';
 const UNGROUPED_ID = '__ungrouped';
 const MODAL_CLOSE_MS = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 160;
 
@@ -33,6 +33,14 @@ const DEFAULTS = {
     groups: [], // [{ id, name, enabled, collapsed, members: [key] }]
     ungroupedCollapsed: false, // collapse state of the implicit "未分组" section
 };
+
+/** Checkbox rows in the settings drawer, in display order: [element id, settings key]. */
+const OPTION_INPUTS = [
+    ['emm-opt-compact', 'compactActions'],
+    ['emm-opt-search', 'showSearch'],
+    ['emm-opt-hidebuiltins', 'hideBuiltins'],
+    ['emm-opt-bleed', 'barFullBleed'],
+];
 
 const settings = Object.assign(
     {},
@@ -78,6 +86,7 @@ export {
     LEGACY_MODULE_NAME,
     MODAL_CLOSE_MS,
     MODULE_NAME,
+    OPTION_INPUTS,
     SETTLE_MAX_MS,
     SETTLE_QUIET_MS,
     UNGROUPED_ID,

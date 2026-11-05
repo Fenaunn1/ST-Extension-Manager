@@ -138,35 +138,40 @@ function renderGroupEditor(force = false) {
 }
 
 /**
- * Reorder the group list by dragging a row's grip. Rows are rebuilt after a
- * drop, so the hook is re-attached on every render.
+ * Drag reordering shared by the group rows and the bound-member rows. Both
+ * lists behave the same way: the hovered half of a row shows where the drop
+ * lands, and the list's own move function receives (source, target, after).
  */
-function bindGroupRowDrag(host) {
+function bindVerticalReorder(host, { itemSelector, dragHandleSelector, idOf, onDrop }) {
     let draggedId = null;
     const clearMarks = () => {
-        host.querySelectorAll('.emm-mg-item').forEach(item => {
+        host.querySelectorAll(itemSelector).forEach(item => {
             item.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after');
         });
     };
+    const isAfter = (item, event) => {
+        const rect = item.getBoundingClientRect();
+        return event.clientY > rect.top + rect.height / 2;
+    };
 
-    host.querySelectorAll('.emm-mg-item').forEach(item => {
-        const grip = item.querySelector('.emm-mg-grip');
-        grip?.addEventListener('dragstart', event => {
-            draggedId = item.dataset.groupId;
+    host.querySelectorAll(itemSelector).forEach(item => {
+        // Without a handle selector the whole row is the drag source.
+        const handle = dragHandleSelector ? item.querySelector(dragHandleSelector) : item;
+        handle?.addEventListener('dragstart', event => {
+            draggedId = idOf(item);
             item.classList.add('is-dragging');
             event.dataTransfer?.setData('text/plain', draggedId ?? '');
             if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
         });
-        grip?.addEventListener('dragend', () => {
+        handle?.addEventListener('dragend', () => {
             draggedId = null;
             clearMarks();
         });
 
         item.addEventListener('dragover', event => {
-            if (!draggedId || draggedId === item.dataset.groupId) return;
+            if (!draggedId || draggedId === idOf(item)) return;
             event.preventDefault();
-            const rect = item.getBoundingClientRect();
-            const after = event.clientY > rect.top + rect.height / 2;
+            const after = isAfter(item, event);
             item.classList.toggle('is-drop-before', !after);
             item.classList.toggle('is-drop-after', after);
         });
@@ -174,14 +179,25 @@ function bindGroupRowDrag(host) {
             item.classList.remove('is-drop-before', 'is-drop-after');
         });
         item.addEventListener('drop', event => {
-            if (!draggedId || draggedId === item.dataset.groupId) return;
+            if (!draggedId || draggedId === idOf(item)) return;
             event.preventDefault();
-            const rect = item.getBoundingClientRect();
-            const after = event.clientY > rect.top + rect.height / 2;
-            moveGroup(draggedId, item.dataset.groupId, after);
+            onDrop(draggedId, idOf(item), isAfter(item, event));
             draggedId = null;
             clearMarks();
         });
+    });
+}
+
+/**
+ * Reorder the group list by dragging a row's grip. Rows are rebuilt after a
+ * drop, so the hook is re-attached on every render.
+ */
+function bindGroupRowDrag(host) {
+    bindVerticalReorder(host, {
+        itemSelector: '.emm-mg-item',
+        dragHandleSelector: '.emm-mg-grip',
+        idOf: item => item.dataset.groupId,
+        onDrop: moveGroup,
     });
 }
 
@@ -307,13 +323,29 @@ function renderBoundList(keys, host) {
 }
 
 /**
+ * The group under edit plus the live settings entry behind it, or null when the
+ * dialog closed or the group was deleted while a confirm was open.
+ */
+function stagedGroup() {
+    const edit = state.edit;
+    const group = currentEditGroup();
+    return edit && group ? { edit, group } : null;
+}
+
+/** Re-check after an awaited confirm: the dialog may have closed or the group
+ * been deleted while the user was deciding. */
+function stillStaged({ edit, group }) {
+    return state.edit === edit && settings.groups.includes(group);
+}
+
+/**
  * Keyboard counterpart to dragging: shifts one member by one slot and puts the
  * focus back on the moved row so repeated presses keep working.
  */
 function moveBoundKeyByStep(key, step) {
-    const edit = state.edit;
-    const group = currentEditGroup();
-    if (!edit || !group) return;
+    const staged = stagedGroup();
+    if (!staged) return;
+    const { edit, group } = staged;
     const bound = [...edit.assign.entries()]
         .filter(([, ownerId]) => ownerId === group.id)
         .map(([boundKey]) => boundKey);
@@ -326,44 +358,10 @@ function moveBoundKeyByStep(key, step) {
 
 /** Reorder bound members by dragging a row up or down the list. */
 function bindChipDrag(host) {
-    let draggedKey = null;
-    const clearMarks = () => {
-        host.querySelectorAll('.emm-bound-row').forEach(row => {
-            row.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after');
-        });
-    };
-
-    host.querySelectorAll('.emm-bound-row').forEach(row => {
-        row.addEventListener('dragstart', event => {
-            draggedKey = row.dataset.key;
-            row.classList.add('is-dragging');
-            event.dataTransfer?.setData('text/plain', draggedKey ?? '');
-            if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-        });
-        row.addEventListener('dragend', () => {
-            draggedKey = null;
-            clearMarks();
-        });
-        row.addEventListener('dragover', event => {
-            if (!draggedKey || draggedKey === row.dataset.key) return;
-            event.preventDefault();
-            const rect = row.getBoundingClientRect();
-            const after = event.clientY > rect.top + rect.height / 2;
-            row.classList.toggle('is-drop-before', !after);
-            row.classList.toggle('is-drop-after', after);
-        });
-        row.addEventListener('dragleave', () => {
-            row.classList.remove('is-drop-before', 'is-drop-after');
-        });
-        row.addEventListener('drop', event => {
-            if (!draggedKey || draggedKey === row.dataset.key) return;
-            event.preventDefault();
-            const rect = row.getBoundingClientRect();
-            const after = event.clientY > rect.top + rect.height / 2;
-            reorderBoundKey(draggedKey, row.dataset.key, after);
-            draggedKey = null;
-            clearMarks();
-        });
+    bindVerticalReorder(host, {
+        itemSelector: '.emm-bound-row',
+        idOf: row => row.dataset.key,
+        onDrop: reorderBoundKey,
     });
 }
 
@@ -373,10 +371,9 @@ function bindChipDrag(host) {
  * replays into group.members.
  */
 function reorderBoundKey(sourceKey, targetKey, after) {
-    const edit = state.edit;
-    if (!edit) return;
-    const group = currentEditGroup();
-    if (!group) return;
+    const staged = stagedGroup();
+    if (!staged) return;
+    const { edit, group } = staged;
     const order = [...edit.assign.entries()];
     const bound = order.filter(([, ownerId]) => ownerId === group.id).map(([key]) => key);
     const from = bound.indexOf(sourceKey);
@@ -499,9 +496,9 @@ function renderGroupPicker() {
 
 /** Staged in state.edit.assign; nothing is written until Save. */
 async function bindKeyToGroup(key) {
-    const edit = state.edit;
-    const group = currentEditGroup();
-    if (!edit || !group) return;
+    const staged = stagedGroup();
+    if (!staged) return;
+    const { edit, group } = staged;
 
     const ownerId = edit.assign.get(key) ?? null;
     if (ownerId && ownerId !== group.id) {
@@ -512,7 +509,7 @@ async function bindKeyToGroup(key) {
             message: `将「${title}」从「${owner?.name ?? '其他分组'}」移动到「${group.name}」？保存后生效。`,
             confirmText: '移动',
         });
-        if (!ok || state.edit !== edit || !settings.groups.includes(group)) return;
+        if (!ok || !stillStaged(staged)) return;
     }
 
     edit.assign.set(key, group.id);
@@ -520,9 +517,9 @@ async function bindKeyToGroup(key) {
 }
 
 async function unbindKeyFromGroup(key) {
-    const edit = state.edit;
-    const group = currentEditGroup();
-    if (!edit || !group) return;
+    const staged = stagedGroup();
+    if (!staged) return;
+    const { edit, group } = staged;
 
     const title = keyTitle(key);
     const ok = await askConfirm({
@@ -531,7 +528,7 @@ async function unbindKeyFromGroup(key) {
         confirmText: '移出',
         danger: true,
     });
-    if (!ok || state.edit !== edit || !settings.groups.includes(group)) return;
+    if (!ok || !stillStaged(staged)) return;
 
     edit.assign.set(key, null);
     renderGroupPicker();

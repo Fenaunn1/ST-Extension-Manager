@@ -1,0 +1,112 @@
+/* 吐司提示
+   由 style.css 通过 @import 引入，顺序即层叠顺序。 */
+
+/* Toast -------------------------------------------------------------- */
+
+@keyframes emm-toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes emm-toast-out {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(6px) scale(0.98);
+    }
+}
+
+/* SillyTavern pins <body> to position:fixed on narrow screens, which collapses
+   the transformed <html> box; anchoring to "bottom" would then land the toast
+   above the visible area. So the layer fills the viewport explicitly and the
+   bubble is centered with flex instead of offsets. */
+.emm-toast[hidden] {
+    display: none !important;
+}
+
+/* Topmost layer, and the only one that lets clicks through. */
+.emm-toast {
+    z-index: 100020;
+    padding: 16px;
+    padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px));
+    pointer-events: none;
+}
+
+.emm-toast-bubble {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(360px, 100%);
+    padding: 10px 16px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.35));
+    border-radius: 999px;
+    background: var(--SmartThemeBlurTintColor, #202228);
+    color: var(--SmartThemeBodyColor, #ddd);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    font-size: calc(var(--mainFontSize) * 0.82);
+    line-height: 1.4;
+}
+
+.emm-toast.is-visible .emm-toast-bubble {
+    animation: emm-toast-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.emm-toast.is-hiding .emm-toast-bubble {
+    animation: emm-toast-out 0.18s ease-in forwards;
+}
+
+.emm-toast-icon {
+    flex: 0 0 auto;
+    color: var(--SmartThemeQuoteColor, #a78bfa);
+    font-size: 1.05em;
+}
+
+/* Undo affordance inside the toast; the bubble stays pill-shaped. */
+.emm-toast-action {
+    flex: 0 0 auto;
+    margin-left: 2px;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--emm-m-accent, #7d8cff) 22%, transparent);
+    color: var(--emm-m-accent, #9aa6ff);
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.12s ease;
+}
+
+.emm-toast-action:hover {
+    background: color-mix(in srgb, var(--emm-m-accent, #7d8cff) 34%, transparent);
+}
+
+.emm-toast-action:focus-visible {
+    outline: 2px solid var(--emm-m-accent, #9aa6ff);
+    outline-offset: 1px;
+}
+
+.emm-toast-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .emm-toast.is-visible .emm-toast-bubble,
+    .emm-toast.is-hiding .emm-toast-bubble {
+        animation: none !important;
+    }
+}

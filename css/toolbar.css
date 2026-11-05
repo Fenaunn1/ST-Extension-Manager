@@ -1,0 +1,298 @@
+/* 搜索行、标签行、图标按钮与 ⋯ 菜单
+   由 style.css 通过 @import 引入，顺序即层叠顺序。 */
+
+/* ------------------------------------------------------------------ */
+/* Search row                                                          */
+/* ------------------------------------------------------------------ */
+
+.emm-search-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+}
+
+.emm-search-icon {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.8);
+    color: var(--emm-muted);
+}
+
+.emm-search-input {
+    flex: 1 1 auto;
+    min-width: 60px;
+    height: 28px;
+    min-height: 28px;
+    margin: 0;
+    padding: 0 8px;
+    border: 1px solid var(--emm-border);
+    border-radius: 7px;
+    background-color: var(--emm-input-bg);
+    color: var(--emm-text);
+}
+
+/* ST applies input[type=text] { background: var(--ui-color-sec) !important }
+   with a type selector. Fixed day/night palettes must win over that rule;
+   auto mode intentionally keeps ST's native input styling. */
+#emm-sticky.emm-theme-day #emm-search.emm-search-input,
+#emm-sticky.emm-theme-night #emm-search.emm-search-input {
+    border-color: var(--emm-border) !important;
+    background-color: var(--emm-input-bg) !important;
+    color: var(--emm-text) !important;
+}
+
+.emm-search-input::placeholder {
+    color: var(--emm-muted);
+    opacity: 1;
+}
+
+#emm-sticky.emm-theme-day #emm-search.emm-search-input::placeholder,
+#emm-sticky.emm-theme-night #emm-search.emm-search-input::placeholder {
+    color: var(--emm-muted) !important;
+    opacity: 1;
+}
+
+#emm-sticky.emm-theme-day #emm-search.emm-search-input:focus,
+#emm-sticky.emm-theme-night #emm-search.emm-search-input:focus {
+    border-color: var(--emm-accent) !important;
+    outline: none;
+}
+
+.emm-count {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.72);
+    color: var(--emm-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ */
+/* Tabs row                                                            */
+/* ------------------------------------------------------------------ */
+
+/* Height is pinned so a tabs scrollbar appearing never changes this row's
+   height and squeezes the title row docked beneath it. */
+.emm-tabs-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    box-sizing: border-box;
+}
+
+.emm-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--emm-border) transparent;
+}
+
+.emm-tabs::-webkit-scrollbar {
+    height: 4px;
+}
+
+.emm-tabs::-webkit-scrollbar-thumb {
+    background: var(--emm-border);
+    border-radius: 4px;
+}
+
+.emm-tabs::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.emm-tabs-empty {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-left: 2px;
+    font-size: calc(var(--mainFontSize) * 0.78);
+    color: var(--emm-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.emm-tabs:empty {
+    display: none;
+}
+
+.emm-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+    max-width: 170px;
+    padding: 3px 5px 3px 9px;
+    border-radius: 8px;
+    border: 1px solid var(--emm-border);
+    background: var(--emm-tab-bg);
+    color: var(--emm-text);
+    font-family: inherit;
+    font-size: calc(var(--mainFontSize) * 0.8);
+    line-height: 1.25;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.emm-tab:hover {
+    background: var(--emm-tab-hover);
+}
+
+/* Active tab only lights up its border: a tinted background competes with
+   the theme's own colors and reads as a second selection state. */
+.emm-tab.active {
+    border-color: var(--emm-accent);
+    background: var(--emm-tab-bg);
+    box-shadow: inset 0 0 0 1px var(--emm-accent);
+}
+
+.emm-tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.emm-tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    opacity: 0.55;
+    font-size: 0.85em;
+}
+
+.emm-tab-close:hover {
+    opacity: 1;
+    background: var(--emm-tab-hover);
+}
+
+/* ------------------------------------------------------------------ */
+/* Buttons                                                             */
+/* ------------------------------------------------------------------ */
+
+/* One square icon box for the toolbar rows and the group list header; the two
+   classes stay separate because each carries different colour rules. */
+.emm-icon-btn,
+.emm-groups-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0;
+    margin: 0;
+}
+
+#emm-sticky .emm-icon-btn,
+#emm-sticky .emm-kebab,
+#emm-sticky .emm-groups-btn {
+    color: var(--emm-text);
+    background: var(--emm-button-bg);
+}
+
+#emm-sticky .emm-icon-btn:hover,
+#emm-sticky .emm-kebab:hover,
+#emm-sticky .emm-groups-btn:hover {
+    background: var(--emm-tab-hover);
+}
+
+.emm-icon-btn.emm-disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+#emm-search-clear {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+}
+
+/* ------------------------------------------------------------------ */
+/* ⋯ dropdown                                                          */
+/* ------------------------------------------------------------------ */
+
+#rm_extensions_block.emm-compact #extensions_details,
+#rm_extensions_block.emm-compact #third_party_extension_button {
+    display: none !important;
+}
+
+/* Anchor for a dropdown that has to sit under its trigger. */
+.emm-menu-wrap,
+.emm-gear-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.emm-kebab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    margin-left: 2px;
+}
+
+.emm-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 180px;
+    padding: 5px;
+    border-radius: 10px;
+    border: 1px solid var(--emm-border);
+    background: var(--emm-popover);
+    color: var(--emm-text);
+    box-shadow: 0 12px 30px var(--emm-shadow);
+    backdrop-filter: blur(12px);
+}
+
+.emm-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--emm-text);
+    font-family: inherit;
+    font-size: calc(var(--mainFontSize) * 0.85);
+    text-align: left;
+    cursor: pointer;
+}
+
+.emm-menu-item:hover {
+    background: var(--emm-tab-hover);
+}
+
+.emm-menu-item i {
+    width: 16px;
+    text-align: center;
+    opacity: 0.8;
+}
+
+.emm-menu-sep {
+    height: 1px;
+    margin: 3px 4px;
+    background: var(--emm-border);
+    opacity: 0.6;
+}

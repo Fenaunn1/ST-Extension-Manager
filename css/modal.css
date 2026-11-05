@@ -1,0 +1,521 @@
+/* 浮层外壳、动效、分组管理行与开关
+   由 style.css 通过 @import 引入，顺序即层叠顺序。 */
+
+/* ------------------------------------------------------------------ */
+/* Group manager modal                                                 */
+/* ------------------------------------------------------------------ */
+
+body.emm-modal-open {
+    overflow: hidden;
+}
+
+.emm-modal[hidden] {
+    display: none !important;
+}
+
+/* Every overlay fills the visual viewport and centers its card, so no dialog
+   can be pushed off-screen by a short or narrow window. Only the z-index, the
+   safe-area padding and the toast's click-through differ per layer. */
+.emm-modal,
+.emm-confirm,
+.emm-toast {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.emm-modal {
+    z-index: 99999;
+    padding: 16px;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+.emm-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+@keyframes emm-modal-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes emm-modal-out {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(6px) scale(0.985);
+    }
+}
+
+@keyframes emm-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes emm-fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.emm-modal:not([hidden]) .emm-modal-backdrop,
+.emm-confirm:not([hidden]) .emm-confirm-backdrop {
+    animation: emm-fade-in 0.16s ease-out;
+}
+
+.emm-modal:not([hidden]) .emm-modal-card,
+.emm-confirm:not([hidden]) .emm-confirm-card {
+    animation: emm-modal-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.emm-modal.emm-closing {
+    pointer-events: none;
+}
+
+.emm-modal.emm-closing .emm-modal-backdrop {
+    animation: emm-fade-out 0.15s ease-in forwards;
+}
+
+.emm-modal.emm-closing .emm-modal-card {
+    animation: emm-modal-out 0.15s ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .emm-modal .emm-modal-backdrop,
+    .emm-modal .emm-modal-card,
+    .emm-confirm .emm-confirm-backdrop,
+    .emm-confirm .emm-confirm-card {
+        animation: none !important;
+    }
+}
+
+.emm-modal-card {
+    --emm-m-text: var(--SmartThemeBodyColor, #ddd);
+    --emm-m-muted: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 58%, transparent);
+    --emm-m-border: var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.3));
+    --emm-m-accent: var(--SmartThemeQuoteColor, #a78bfa);
+    --emm-m-tint: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 5%, transparent);
+    --emm-m-tint-strong: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 10%, transparent);
+
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    width: min(520px, 100%);
+    max-width: 100%;
+    max-height: min(760px, 100%);
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.35));
+    border-radius: 14px;
+    background: var(--SmartThemeBlurTintColor, #202228);
+    color: var(--SmartThemeBodyColor, #ddd);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.emm-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.3));
+}
+
+.emm-modal-head b {
+    font-size: calc(var(--mainFontSize) * 0.95);
+}
+
+/* Title with a leading glyph: icon, then label, both vertically centred. */
+.emm-modal-head .emm-head-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.emm-head-icon {
+    flex: 0 0 auto;
+    color: var(--emm-m-accent);
+    font-size: calc(var(--mainFontSize) * 0.9);
+}
+
+/* The close affordance is the only exit, so it gets a larger hit box than the
+   toolbar icons (.emm-icon-btn's 28px) even though it shares their look. */
+.emm-modal-close {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border: 0;
+    border-radius: 9px;
+    font-size: calc(var(--mainFontSize) * 1.16);
+    line-height: 1;
+    color: inherit;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.emm-modal-close i {
+    font-size: inherit;
+    pointer-events: none;
+}
+
+.emm-modal-close:hover {
+    background: var(--emm-m-tint-strong);
+}
+
+.emm-modal-close:active {
+    transform: scale(0.9);
+}
+
+.emm-modal-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    padding: 12px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--emm-m-text) 24%, transparent) transparent;
+}
+
+.emm-modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.emm-modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.emm-modal-body::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--emm-m-text) 22%, transparent);
+    border-radius: 8px;
+}
+
+.emm-modal-body::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--emm-m-text) 34%, transparent);
+}
+
+.emm-modal .emm-add-group {
+    display: flex;
+    gap: 6px;
+}
+
+.emm-modal .emm-add-group input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 30px;
+    min-height: 30px;
+    margin: 0;
+    padding: 0 8px;
+}
+
+.emm-modal .emm-add-group .menu_button {
+    flex: 0 0 auto;
+    height: 30px;
+    min-height: 30px;
+    margin: 0;
+    padding: 0 12px;
+    white-space: nowrap;
+}
+
+/* Group manager rows ------------------------------------------------ */
+
+#emm-group-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.emm-groups-empty {
+    padding: 22px 10px;
+    border: 1px dashed var(--emm-m-border);
+    border-radius: 11px;
+    color: var(--emm-m-muted);
+    font-size: calc(var(--mainFontSize) * 0.8);
+    text-align: center;
+}
+
+.emm-mg-item {
+    border: 1px solid var(--emm-m-border);
+    border-radius: 11px;
+    background: var(--emm-m-tint);
+    overflow: hidden;
+    transition: background 0.15s ease;
+}
+
+.emm-mg-item.open {
+    background: var(--emm-m-tint-strong);
+}
+
+.emm-mg-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 4px 6px 4px 4px;
+}
+
+/* Drag handle: the only part of the row that starts a reorder. */
+.emm-mg-grip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    opacity: 0.28;
+    cursor: grab;
+    transition: opacity 0.12s ease;
+}
+
+.emm-mg-grip:hover {
+    opacity: 0.7;
+}
+
+.emm-mg-grip:active {
+    cursor: grabbing;
+}
+
+.emm-mg-grip:focus-visible {
+    outline: 2px solid var(--emm-m-accent);
+    outline-offset: 1px;
+    border-radius: 6px;
+}
+
+.emm-mg-item.is-dragging {
+    opacity: 0.45;
+}
+
+/* Insertion line for the row being dropped onto, shared by both drag lists. */
+.emm-mg-item.is-drop-before,
+.emm-bound-row.is-drop-before {
+    box-shadow: inset 0 2px 0 var(--emm-m-accent);
+}
+
+.emm-mg-item.is-drop-after,
+.emm-bound-row.is-drop-after {
+    box-shadow: inset 0 -2px 0 var(--emm-m-accent);
+}
+
+.emm-mg-caret {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.emm-mg-caret i {
+    display: block;
+    font-size: 0.72em;
+    line-height: 1;
+    opacity: 0.5;
+}
+
+.emm-mg-caret .emm-caret-down,
+.emm-mg-item.open .emm-mg-caret .emm-caret-right {
+    display: none;
+}
+
+.emm-mg-item.open .emm-mg-caret .emm-caret-down {
+    display: block;
+}
+
+.emm-mg-caret:hover {
+    background: var(--emm-m-tint-strong);
+}
+
+.emm-mg-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 5px 2px;
+    border: 0;
+    background: transparent;
+    color: var(--emm-m-text);
+    font-family: inherit;
+    font-size: calc(var(--mainFontSize) * 1);
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.emm-mg-name:hover {
+    color: var(--emm-m-accent);
+}
+
+.emm-mg-item.is-off .emm-mg-name {
+    opacity: 0.5;
+}
+
+.emm-mg-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    opacity: 0.55;
+    cursor: pointer;
+    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.emm-mg-btn:hover {
+    opacity: 1;
+    background: var(--emm-m-tint-strong);
+}
+
+.emm-mg-delete:hover {
+    color: #e5484d;
+    background: color-mix(in srgb, #e5484d 14%, transparent);
+}
+
+.emm-mg-caret:focus-visible,
+.emm-mg-btn:focus-visible,
+.emm-mg-name:focus-visible {
+    outline: 2px solid var(--emm-m-accent);
+    outline-offset: -2px;
+}
+
+.emm-mg-members {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 0 10px 10px 36px;
+}
+
+.emm-mg-members[hidden] {
+    display: none !important;
+}
+
+.emm-mg-empty {
+    padding: 2px 0;
+    color: var(--emm-m-muted);
+    font-size: calc(var(--mainFontSize) * 0.76);
+}
+
+.emm-chip {
+    max-width: 100%;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--emm-m-tint-strong);
+    font-size: calc(var(--mainFontSize) * 0.76);
+    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Switch ------------------------------------------------------------ */
+
+.emm-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+}
+
+/* ST's input[type="checkbox"] sizing outranks a plain class selector; pin the
+   real input on top of the track so it cannot shrink the track's flex layout. */
+.emm-switch .emm-switch-input {
+    position: absolute !important;
+    inset: 0;
+    z-index: 2;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent !important;
+    box-shadow: none !important;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.emm-switch-track {
+    position: relative;
+    display: block;
+    flex: 0 0 26px;
+    width: 26px;
+    height: 15px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--emm-m-text) 26%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--emm-m-text) 14%, transparent);
+    transition: background 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+.emm-switch-thumb {
+    position: absolute;
+    top: 2.5px;
+    left: 2.5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.38);
+    transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.emm-switch-input:checked + .emm-switch-track {
+    background: var(--emm-m-accent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 14%, transparent);
+}
+
+.emm-switch-input:checked + .emm-switch-track .emm-switch-thumb {
+    transform: translateX(11px);
+}
+
+.emm-switch:hover .emm-switch-track {
+    filter: brightness(1.06);
+}
+
+.emm-switch-input:focus-visible + .emm-switch-track {
+    outline: 2px solid var(--emm-m-accent);
+    outline-offset: 2px;
+}

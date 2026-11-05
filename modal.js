@@ -136,6 +136,16 @@ function shieldDrawerEvents(element) {
     }
 }
 
+/**
+ * Attaches a freshly built overlay to <body> and wires its click handler in one
+ * place, so every layer gets the same drawer shield.
+ */
+function mountLayer(layer, onAction) {
+    document.body.appendChild(layer);
+    shieldDrawerEvents(layer);
+    if (onAction) layer.addEventListener('click', onAction);
+}
+
 function buildGroupModal() {
     if (!document.getElementById('emm-group-modal')) {
         const modal = document.createElement('div');
@@ -173,9 +183,7 @@ function buildGroupModal() {
                 </div>
             </div>
         `;
-        document.body.appendChild(modal);
-        shieldDrawerEvents(modal);
-        modal.addEventListener('click', event => {
+        mountLayer(modal, event => {
             const action = event.target.closest('[data-action]')?.dataset.action;
             if (action === 'close') closeGroupModal();
             else if (action === 'export-groups') exportGroupsConfig();
@@ -322,9 +330,7 @@ function buildGroupEditModal() {
             </div>
         </div>
     `;
-    document.body.appendChild(modal);
-    shieldDrawerEvents(modal);
-    modal.addEventListener('click', event => {
+    mountLayer(modal, event => {
         if (event.target.closest('[data-action="close-edit"]')) requestCloseGroupEditor();
     });
     const tabs = [...modal.querySelectorAll('.emm-picker-tab')];
@@ -374,8 +380,7 @@ function showToast(message, options = {}) {
         layer.setAttribute('role', 'status');
         layer.setAttribute('aria-live', 'polite');
         layer.innerHTML = '<div class="emm-toast-bubble"><i class="fa-solid fa-circle-check emm-toast-icon" aria-hidden="true"></i><span class="emm-toast-text"></span></div>';
-        document.body.appendChild(layer);
-        shieldDrawerEvents(layer);
+        mountLayer(layer);
     }
     const text = layer.querySelector('.emm-toast-text');
     if (text) text.textContent = message;
@@ -386,6 +391,14 @@ function showToast(message, options = {}) {
         action = document.createElement('button');
         action.type = 'button';
         action.className = 'emm-toast-action';
+        // Bound once: the payload lives in state.toastAction so repeated toasts
+        // never stack another listener on the same button.
+        action.addEventListener('click', () => {
+            const pending = state.toastAction;
+            state.toastAction = null;
+            hideToast();
+            pending?.();
+        });
         layer.querySelector('.emm-toast-bubble')?.append(action);
     }
     const label = normalize(options.actionLabel);
@@ -394,12 +407,6 @@ function showToast(message, options = {}) {
     state.toastAction = run;
     action.hidden = !run;
     action.textContent = label;
-    action.addEventListener('click', () => {
-        const pending = state.toastAction;
-        state.toastAction = null;
-        hideToast();
-        pending?.();
-    });
 
     if (layer.__emmToastTimer) clearTimeout(layer.__emmToastTimer);
     layer.classList.remove('is-hiding');
@@ -444,9 +451,7 @@ function buildConfirmDialog() {
             </div>
         </div>
     `;
-    document.body.appendChild(layer);
-    shieldDrawerEvents(layer);
-    layer.addEventListener('click', event => {
+    mountLayer(layer, event => {
         const action = event.target.closest('[data-action]')?.dataset.action;
         if (action === 'cancel') finishConfirm(false);
         else if (action === 'ok') finishConfirm(true);

@@ -5,7 +5,7 @@
  * drawer that is injected next to the built-in settings blocks.
  */
 
-import { VERSION, saveSettings, settings, ui } from './core.js';
+import { OPTION_INPUTS, VERSION, saveSettings, settings, ui } from './core.js';
 import { clampLabelMax } from './dom.js';
 import { normalizeGroups } from './groups.js';
 import { refresh, renderTabs } from './render.js';
@@ -190,13 +190,7 @@ function appendSettingsDrawer() {
         });
     }
 
-    const options = [
-        ['emm-opt-compact', 'compactActions'],
-        ['emm-opt-search', 'showSearch'],
-        ['emm-opt-hidebuiltins', 'hideBuiltins'],
-        ['emm-opt-bleed', 'barFullBleed'],
-    ];
-    for (const [id, key] of options) {
+    for (const [id, key] of OPTION_INPUTS) {
         const input = /** @type {HTMLInputElement} */ (document.getElementById(id));
         input.checked = !!settings[key];
         input.addEventListener('change', () => {

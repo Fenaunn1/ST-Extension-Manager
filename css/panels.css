@@ -1,0 +1,364 @@
+/* 搜索结果、自有设置抽屉、分组列表、齿轮菜单与内置区块
+   由 style.css 通过 @import 引入，顺序即层叠顺序。 */
+
+/* ------------------------------------------------------------------ */
+/* Search results                                                      */
+/* ------------------------------------------------------------------ */
+
+#rm_extensions_block .emm-filtered {
+    display: none !important;
+}
+
+.emm-no-results {
+    padding: 6px 4px;
+    font-size: calc(var(--mainFontSize) * 0.82);
+    color: var(--emm-muted);
+    text-align: center;
+}
+
+/* ------------------------------------------------------------------ */
+/* Own settings drawer                                                 */
+/* ------------------------------------------------------------------ */
+
+#emm-settings-drawer .inline-drawer-content {
+    padding: 4px 8px 8px;
+}
+
+/* All four option rows share one geometry: no indent, one half-width space
+   of breathing room between the box and the label. */
+#emm-settings-drawer .checkbox_label,
+#emm-settings-drawer .emm-opt-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 6px 0;
+    padding-left: 0;
+    cursor: default;
+}
+
+#emm-settings-drawer .checkbox_label input[type="checkbox"],
+#emm-settings-drawer .emm-opt-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    margin: 0 5px 0 0;
+}
+
+#emm-settings-drawer .emm-opt-row-label {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+#emm-settings-drawer .emm-select-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin: 2px 0 8px;
+}
+
+#emm-settings-drawer .emm-select-row label {
+    flex: 1 1 auto;
+    white-space: nowrap;
+}
+
+#emm-settings-drawer .emm-theme-select {
+    flex: 1 1 100%;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    padding: 0 6px;
+}
+
+#emm-settings-drawer .emm-opt-icon {
+    width: 12px;
+    flex: 0 0 12px;
+    text-align: center;
+    font-size: calc(var(--mainFontSize) * 0.72);
+    opacity: 0.6;
+}
+
+#emm-settings-drawer .emm-hint {
+    margin-top: 5px;
+    font-size: calc(var(--mainFontSize) * 0.72);
+    line-height: 1.35;
+    opacity: 0.55;
+}
+
+#emm-settings-drawer .emm-opt-desc {
+    margin: -2px 0 9px;
+    padding-left: 0;
+    font-size: calc(var(--mainFontSize) * 0.74);
+    line-height: 1.4;
+    text-align: left;
+    opacity: 0.62;
+}
+
+#emm-settings-drawer .emm-number {
+    flex: 0 0 58px;
+    width: 58px;
+    height: 26px;
+    min-height: 26px;
+    margin: 0 0 0 6px;
+    padding: 0 4px;
+    text-align: center;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+#emm-settings-drawer .emm-number::-webkit-outer-spin-button,
+#emm-settings-drawer .emm-number::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+#emm-settings-drawer .emm-number:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------ */
+/* Grouped extension list                                              */
+/* ------------------------------------------------------------------ */
+
+#emm-groups {
+    flex: 0 0 100%;
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#emm-groups[hidden] {
+    display: none !important;
+}
+
+/* Docked title row: lives in the sticky bar right below the tab strip, so it
+   stays visible while the grouped list scrolls. Fixed height and flex-basis
+   keep it identical whether or not the tab strip grows a scrollbar. */
+.emm-groups-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    width: 100%;
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    box-sizing: border-box;
+    padding: 0;
+    overflow: hidden;
+}
+
+.emm-groups-head[hidden] {
+    display: none !important;
+}
+
+.emm-groups-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: calc(var(--mainFontSize) * 1);
+    font-weight: 700;
+    line-height: 28px;
+    color: var(--emm-text, var(--SmartThemeBodyColor, #ddd));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Decorative only: the icon rides alongside the label, never pushes it. */
+.emm-groups-title-icon {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.86);
+    opacity: 0.62;
+}
+
+.emm-groups-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+/* Same box, radius, border and font as the toolbar icons above: these carry the
+   identical .menu_button base class, so anything set here would drift from them. */
+.emm-groups-btn:focus-visible {
+    outline: 2px solid var(--emm-accent, var(--SmartThemeQuoteColor, #a78bfa));
+    outline-offset: 1px;
+}
+
+.emm-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.emm-group[hidden] {
+    display: none !important;
+}
+
+.emm-group-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 2px;
+    border: 0;
+    background: transparent;
+    color: var(--SmartThemeBodyColor, #ddd);
+    font-family: inherit;
+    font-size: calc(var(--mainFontSize) * 0.95);
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+.emm-group-head:hover {
+    color: var(--SmartThemeQuoteColor, var(--SmartThemeBodyColor, #ddd));
+}
+
+/* Two glyphs instead of one rotated glyph: the down / right pair is already
+   optically centred, so no angle tuning is needed and the mark cannot end up a
+   fraction of a pixel off the row baseline. */
+.emm-group-caret {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    font-size: 0.75em;
+    line-height: 1;
+    opacity: 0.55;
+}
+
+.emm-group-caret i {
+    display: block;
+    line-height: 1;
+}
+
+.emm-group-caret .emm-caret-right,
+.emm-collapsed .emm-group-caret .emm-caret-down {
+    display: none;
+}
+
+.emm-collapsed .emm-group-caret .emm-caret-right {
+    display: block;
+}
+
+.emm-group-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.emm-group-count {
+    flex: 0 0 auto;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 10%, transparent);
+    font-size: 0.75em;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+}
+
+.emm-group-spacer {
+    flex: 1 1 auto;
+}
+
+.emm-group-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+}
+
+.emm-collapsed .emm-group-body {
+    display: none;
+}
+
+#emm-groups.emm-searching .emm-collapsed .emm-group-body {
+    display: flex;
+}
+
+/* A search force-opens every section, so the mark must show the open state
+   even though the collapsed class is still on the section. */
+#emm-groups.emm-searching .emm-collapsed .emm-group-caret .emm-caret-down {
+    display: block;
+}
+
+#emm-groups.emm-searching .emm-collapsed .emm-group-caret .emm-caret-right {
+    display: none;
+}
+
+.emm-group-col {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.emm-group-col:empty {
+    display: none;
+}
+
+#emm-groups .inline-drawer {
+    min-width: 0;
+}
+
+@media (max-width: 640px) {
+    .emm-group-body {
+        flex-direction: column;
+    }
+
+    .emm-group-col {
+        flex: 0 0 auto;
+        width: 100%;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Gear menu                                                           */
+/* ------------------------------------------------------------------ */
+
+.emm-gear-menu {
+    min-width: 220px;
+    max-width: min(280px, 86vw);
+}
+
+/* ------------------------------------------------------------------ */
+/* Hide built-in blocks                                                */
+/* ------------------------------------------------------------------ */
+
+#rm_extensions_block.emm-hide-builtins #assets_container,
+#rm_extensions_block.emm-hide-builtins [data-emm-builtin="assets"],
+#rm_extensions_block.emm-hide-builtins [data-emm-builtin="api"] {
+    display: none !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Gear menu toggle                                                    */
+/* ------------------------------------------------------------------ */
+
+.emm-menu-toggle {
+    cursor: pointer;
+}
+
+.emm-menu-toggle .emm-toggle-input {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin: 0 0 0 auto;
+    accent-color: var(--emm-accent, #a78bfa);
+    cursor: pointer;
+}
