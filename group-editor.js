@@ -497,11 +497,23 @@ function renderGroupPicker() {
     list.scrollTop = scrollTop;
 }
 
-/** Staged in state.edit.assign; nothing is written until Save, so no confirm. */
-function bindKeyToGroup(key) {
+/** Staged in state.edit.assign; nothing is written until Save. */
+async function bindKeyToGroup(key) {
     const edit = state.edit;
     const group = currentEditGroup();
     if (!edit || !group) return;
+
+    const ownerId = edit.assign.get(key) ?? null;
+    if (ownerId && ownerId !== group.id) {
+        const owner = settings.groups.find(item => item.id === ownerId);
+        const title = keyTitle(key);
+        const ok = await askConfirm({
+            title: '移动到本分组',
+            message: `将「${title}」从「${owner?.name ?? '其他分组'}」移动到「${group.name}」？保存后生效。`,
+            confirmText: '移动',
+        });
+        if (!ok || state.edit !== edit || !settings.groups.includes(group)) return;
+    }
 
     edit.assign.set(key, group.id);
     renderGroupPicker();
