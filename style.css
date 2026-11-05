@@ -399,16 +399,28 @@
     padding: 4px 8px 8px;
 }
 
-#emm-settings-drawer .checkbox_label {
+/* All four option rows share one geometry: no indent, one half-width space
+   of breathing room between the box and the label. */
+#emm-settings-drawer .checkbox_label,
+#emm-settings-drawer .emm-opt-row {
     display: flex;
     align-items: center;
-    gap: 4px;
-    margin: 4px 0;
-    cursor: pointer;
+    gap: 0;
+    margin: 6px 0;
+    padding-left: 0;
+    cursor: default;
 }
 
-#emm-settings-drawer .checkbox_label input[type="checkbox"] {
-    margin-right: 0;
+#emm-settings-drawer .checkbox_label input[type="checkbox"],
+#emm-settings-drawer .emm-opt-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    margin: 0 5px 0 0;
+}
+
+#emm-settings-drawer .emm-opt-row-label {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    cursor: pointer;
 }
 
 #emm-settings-drawer .emm-select-row {
@@ -457,13 +469,27 @@
 }
 
 #emm-settings-drawer .emm-number {
-    flex: 0 0 76px;
-    width: 76px;
+    flex: 0 0 58px;
+    width: 58px;
     height: 26px;
     min-height: 26px;
-    margin: 0;
-    padding: 0 6px;
+    margin: 0 0 0 6px;
+    padding: 0 4px;
     text-align: center;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+#emm-settings-drawer .emm-number::-webkit-outer-spin-button,
+#emm-settings-drawer .emm-number::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+#emm-settings-drawer .emm-number:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 /* ------------------------------------------------------------------ */
@@ -650,11 +676,12 @@ body.emm-modal-open {
     display: none !important;
 }
 
+/* The layer always fills the visual viewport and centers its card, so no
+   dialog can be pushed off-screen by a short or narrow window. */
 .emm-modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
+    inset: 0;
+    width: 100%;
     height: 100vh;
     height: 100dvh;
     z-index: 99999;
@@ -662,7 +689,10 @@ body.emm-modal-open {
     align-items: center;
     justify-content: center;
     padding: 16px;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 .emm-modal-backdrop {
@@ -746,8 +776,10 @@ body.emm-modal-open {
     z-index: 1;
     display: flex;
     flex-direction: column;
-    width: min(520px, 92vw);
-    max-height: min(80vh, 760px);
+    width: min(520px, 100%);
+    max-width: 100%;
+    max-height: min(760px, 100%);
+    min-height: 0;
     overflow: hidden;
     border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.35));
     border-radius: 14px;
@@ -1071,13 +1103,13 @@ body.emm-modal-open {
     z-index: 100000;
 }
 
-.emm-groups-card,
-.emm-edit-card {
-    height: min(560px, 80vh);
+.emm-modal-card.emm-groups-card,
+.emm-modal-card.emm-edit-card {
+    height: min(560px, 100%);
 }
 
 .emm-edit-card {
-    width: min(560px, 92vw);
+    width: min(560px, 100%);
 }
 
 .emm-edit-card .emm-modal-body {
@@ -1388,14 +1420,23 @@ body.emm-modal-open {
     display: none !important;
 }
 
+/* Same fixed-positioning caveat as the toast: fill the viewport explicitly
+   so the card still centers when SillyTavern pins <body> on narrow screens. */
 .emm-confirm {
     position: fixed;
     inset: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
     z-index: 100010;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 16px;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .emm-confirm-backdrop {
@@ -1411,7 +1452,10 @@ body.emm-modal-open {
 
     position: relative;
     z-index: 1;
-    width: min(360px, 90vw);
+    width: min(360px, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
     padding: 16px;
     border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.35));
     border-radius: 14px;
@@ -1462,6 +1506,149 @@ body.emm-modal-open {
 .emm-confirm .emm-btn-danger:hover {
     background: #d93a3f;
     border-color: #d93a3f;
+}
+
+/* Toast -------------------------------------------------------------- */
+
+@keyframes emm-toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes emm-toast-out {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(6px) scale(0.98);
+    }
+}
+
+/* SillyTavern pins <body> to position:fixed on narrow screens, which collapses
+   the transformed <html> box; anchoring to "bottom" would then land the toast
+   above the visible area. So the layer fills the viewport explicitly and the
+   bubble is centered with flex instead of offsets. */
+.emm-toast[hidden] {
+    display: none !important;
+}
+
+.emm-toast {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 100020;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 16px;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+.emm-toast-bubble {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(360px, 100%);
+    padding: 10px 16px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.35));
+    border-radius: 999px;
+    background: var(--SmartThemeBlurTintColor, #202228);
+    color: var(--SmartThemeBodyColor, #ddd);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    font-size: calc(var(--mainFontSize) * 0.82);
+    line-height: 1.4;
+}
+
+.emm-toast.is-visible .emm-toast-bubble {
+    animation: emm-toast-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.emm-toast.is-hiding .emm-toast-bubble {
+    animation: emm-toast-out 0.18s ease-in forwards;
+}
+
+.emm-toast-icon {
+    flex: 0 0 auto;
+    color: var(--SmartThemeQuoteColor, #a78bfa);
+    font-size: 1.05em;
+}
+
+.emm-toast-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .emm-toast.is-visible .emm-toast-bubble,
+    .emm-toast.is-hiding .emm-toast-bubble {
+        animation: none !important;
+    }
+}
+
+/* Phones: dialogs take the whole screen instead of floating in it. */
+
+@media (max-width: 640px) {
+    body.emm-modal-open {
+        overflow: hidden;
+    }
+
+    .emm-modal {
+        padding: 0;
+        align-items: stretch;
+    }
+
+    .emm-modal-card,
+    .emm-modal-card.emm-groups-card,
+    .emm-modal-card.emm-edit-card {
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        max-height: 100%;
+        border: 0;
+        border-radius: 0;
+    }
+
+    .emm-modal-head {
+        padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+    }
+
+    .emm-modal-body {
+        padding: 12px 14px 16px;
+    }
+
+    .emm-modal-foot {
+        padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .emm-edit-card .emm-modal-body {
+        padding: 12px 14px 16px;
+    }
+
+    .emm-modal-foot .menu_button {
+        flex: 1 1 0;
+    }
+
+    .emm-confirm {
+        padding: 20px;
+    }
+
+    .emm-confirm-card {
+        width: 100%;
+    }
 }
 
 

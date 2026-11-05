@@ -14,7 +14,7 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.3.2';
+const VERSION = '1.3.3';
 const UNGROUPED_ID = '__ungrouped';
 const MODAL_CLOSE_MS = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 160;
 
@@ -24,6 +24,7 @@ const DEFAULTS = {
     hideBuiltins: false, // hide the built-in Assets drawer and the deprecated Extras API block
     theme: 'auto', // auto | day | night
     tabLabelMax: 5, // characters shown in a tab before the name is clipped
+    tabLabelClip: true, // clip long tab names; off shows the full title
     grouping: false, // show custom groups instead of a flat list
     groups: [], // [{ id, name, enabled, collapsed, members: [title] }]
 };
@@ -220,10 +221,11 @@ function groupNameExists(name, exceptId = null) {
 function clampLabelMax(value) {
     const parsed = Number.parseInt(String(value), 10);
     if (!Number.isFinite(parsed)) return 5;
-    return Math.min(30, Math.max(2, parsed));
+    return Math.min(10, Math.max(2, parsed));
 }
 
 function tabLabel(title) {
+    if (settings.tabLabelClip === false) return title;
     const max = clampLabelMax(settings.tabLabelMax);
     const chars = Array.from(title);
     return chars.length > max ? `${chars.slice(0, max).join('')}…` : title;
@@ -618,7 +620,14 @@ function openGroupEditor(groupId) {
         assign.set(title, findGroupForTitle(title)?.id ?? null);
     }
 
-    state.edit = { groupId, name: group.name, assign, tab: 'ungrouped' };
+    state.edit = {
+        groupId,
+        name: group.name,
+        assign,
+        baseName: group.name,
+        baseAssign: new Map(assign),
+        tab: 'ungrouped',
+    };
     renderGroupEditModal();
 
     const modal = document.getElementById('emm-group-edit');
@@ -698,7 +707,10 @@ function renderGroupPicker() {
     if (edit.tab !== 'ungrouped' && edit.tab !== 'other') edit.tab = 'ungrouped';
 
     for (const title of editableTitles()) {
-        if (!edit.assign.has(title)) edit.assign.set(title, findGroupForTitle(title)?.id ?? null);
+        if (edit.assign.has(title)) continue;
+        const ownerId = findGroupForTitle(title)?.id ?? null;
+        edit.assign.set(title, ownerId);
+        edit.baseAssign?.set(title, ownerId);
     }
 
     const bound = [];
@@ -775,21 +787,11 @@ function renderGroupPicker() {
     list.scrollTop = scrollTop;
 }
 
-async function bindTitleToGroup(title, ownerId) {
+/** Staged in state.edit.assign; nothing is written until Save, so no confirm. */
+function bindTitleToGroup(title) {
     const edit = state.edit;
     const group = currentEditGroup();
     if (!edit || !group) return;
-
-    const owner = ownerId ? settings.groups.find(item => item.id === ownerId) : null;
-    const ok = await askConfirm({
-        title: owner ? '移动插件' : '绑定插件',
-        message: owner
-            ? `将「${title}」从「${owner.name}」移动到「${group.name}」？`
-            : `将「${title}」绑定到分组「${group.name}」？`,
-        confirmText: owner ? '移动' : '绑定',
-        primary: true,
-    });
-    if (!ok || state.edit !== edit || !settings.groups.includes(group)) return;
 
     edit.assign.set(title, group.id);
     renderGroupPicker();
@@ -847,6 +849,47 @@ function saveGroupEditor() {
     saveSettings();
     renderGroupEditor(true);
     applyGrouping(true);
+    closeGroupEditModal();
+    showToast(`已保存分组「${group.name}」`);
+}
+
+/** True when the staged name or membership differs from what was opened. */
+function isGroupEditDirty() {
+    const edit = state.edit;
+    if (!edit) return false;
+    const group = settings.groups.find(item => item.id === edit.groupId);
+    if (!group) return false;
+
+    const currentName = normalize(document.getElementById('emm-edit-name')?.value) || edit.baseName;
+    if (currentName !== edit.baseName) return true;
+
+    const base = edit.baseAssign;
+    if (!base || base.size !== edit.assign.size) return true;
+    for (const [title, ownerId] of edit.assign) {
+        if (!base.has(title)) return true;
+        if (base.get(title) !== ownerId) return true;
+    }
+    return false;
+}
+
+/**
+ * Closing the editor with unsaved edits asks first; without edits it just
+ * closes, so the exit path never nags.
+ */
+async function requestCloseGroupEditor() {
+    const modal = document.getElementById('emm-group-edit');
+    if (!modal || modal.hidden) return;
+    if (!isGroupEditDirty()) {
+        closeGroupEditModal();
+        return;
+    }
+    const ok = await askConfirm({
+        title: '放弃修改',
+        message: '分组有未保存的修改，确定退出并放弃吗？',
+        confirmText: '放弃修改',
+        danger: true,
+    });
+    if (!ok) return;
     closeGroupEditModal();
 }
 
@@ -1087,13 +1130,14 @@ function appendSettingsDrawer() {
                 <span>隐藏内置区块</span>
             </label>
             <p class="emm-opt-desc">隐藏「下载扩展和资源菜单」与「(已弃用) 扩展API」区块。</p>
-            <div class="emm-select-row">
+            <div class="checkbox_label emm-opt-row">
+                <input id="emm-opt-labelclip" type="checkbox">
                 <i class="fa-solid fa-tag emm-opt-icon" aria-hidden="true"></i>
-                <label for="emm-opt-labelmax">标签字数上限</label>
+                <label for="emm-opt-labelclip" class="emm-opt-row-label">标签字数上限</label>
                 <input id="emm-opt-labelmax" class="text_pole emm-number" type="number"
-                       min="2" max="30" step="1" inputmode="numeric">
+                       min="2" max="10" step="1" inputmode="numeric" aria-label="标签字数上限">
             </div>
-            <p class="emm-opt-desc">标签名超过上限时用 … 省略，悬停标签可查看完整名称。</p>
+            <p class="emm-opt-desc">标签名超过上限时用 … 省略，悬停标签可查看完整名称；取消勾选则显示完整名称。</p>
             <div class="emm-hint">版本 ${VERSION}</div>
         </div>
     `;
@@ -1125,9 +1169,20 @@ function appendSettingsDrawer() {
         });
     }
 
+    const labelClip = /** @type {HTMLInputElement} */ (document.getElementById('emm-opt-labelclip'));
     const labelMax = /** @type {HTMLInputElement} */ (document.getElementById('emm-opt-labelmax'));
+    if (labelClip) {
+        labelClip.checked = settings.tabLabelClip !== false;
+        labelClip.addEventListener('change', () => {
+            settings.tabLabelClip = labelClip.checked;
+            if (labelMax) labelMax.disabled = !labelClip.checked;
+            saveSettings();
+            renderTabs(true);
+        });
+    }
     if (labelMax) {
         labelMax.value = String(clampLabelMax(settings.tabLabelMax));
+        labelMax.disabled = settings.tabLabelClip === false;
         labelMax.addEventListener('change', () => {
             settings.tabLabelMax = clampLabelMax(labelMax.value);
             labelMax.value = String(settings.tabLabelMax);
@@ -1291,7 +1346,7 @@ function buildGroupModal() {
             if (edit && !edit.hidden) {
                 event.preventDefault();
                 event.stopPropagation();
-                closeGroupEditModal();
+                requestCloseGroupEditor();
                 return;
             }
             const modal = document.getElementById('emm-group-modal');
@@ -1358,7 +1413,7 @@ function buildGroupEditModal() {
     document.body.appendChild(modal);
     shieldDrawerEvents(modal);
     modal.addEventListener('click', event => {
-        if (event.target.closest('[data-action="close-edit"]')) closeGroupEditModal();
+        if (event.target.closest('[data-action="close-edit"]')) requestCloseGroupEditor();
     });
     modal.querySelectorAll('.emm-picker-tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -1376,6 +1431,43 @@ function buildGroupEditModal() {
             saveGroupEditor();
         }
     });
+}
+
+/**
+ * Non-interactive toast: confirms a save without stealing focus or asking
+ * for a click. Reused so repeated saves restart the same bubble.
+ */
+function showToast(message) {
+    let layer = document.getElementById('emm-toast');
+    if (!layer) {
+        layer = document.createElement('div');
+        layer.id = 'emm-toast';
+        layer.className = 'emm-toast';
+        layer.setAttribute('role', 'status');
+        layer.setAttribute('aria-live', 'polite');
+        layer.innerHTML = '<div class="emm-toast-bubble"><i class="fa-solid fa-circle-check emm-toast-icon" aria-hidden="true"></i><span class="emm-toast-text"></span></div>';
+        document.body.appendChild(layer);
+        shieldDrawerEvents(layer);
+    }
+    const text = layer.querySelector('.emm-toast-text');
+    if (text) text.textContent = message;
+
+    if (layer.__emmToastTimer) clearTimeout(layer.__emmToastTimer);
+    layer.classList.remove('is-hiding');
+    layer.hidden = false;
+    // Force a reflow so a restart replays the entrance animation.
+    void layer.offsetWidth;
+    layer.classList.add('is-visible');
+
+    layer.__emmToastTimer = setTimeout(() => {
+        layer.__emmToastTimer = 0;
+        layer.classList.add('is-hiding');
+        layer.classList.remove('is-visible');
+        setTimeout(() => {
+            if (!layer.classList.contains('is-visible')) layer.hidden = true;
+            layer.classList.remove('is-hiding');
+        }, 200);
+    }, 1800);
 }
 
 function buildConfirmDialog() {
@@ -1500,6 +1592,14 @@ function updateLayout() {
     ]) {
         const input = /** @type {HTMLInputElement} */ (document.getElementById(id));
         if (input) input.checked = !!settings[key];
+    }
+
+    const labelClip = /** @type {HTMLInputElement} */ (document.getElementById('emm-opt-labelclip'));
+    if (labelClip) labelClip.checked = settings.tabLabelClip !== false;
+    const labelMax = /** @type {HTMLInputElement} */ (document.getElementById('emm-opt-labelmax'));
+    if (labelMax) {
+        labelMax.value = String(clampLabelMax(settings.tabLabelMax));
+        labelMax.disabled = settings.tabLabelClip === false;
     }
 
     const themeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('emm-opt-theme'));
