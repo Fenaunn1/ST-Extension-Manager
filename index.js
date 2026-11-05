@@ -14,7 +14,7 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.3.4';
+const VERSION = '1.3.5';
 const UNGROUPED_ID = '__ungrouped';
 const MODAL_CLOSE_MS = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 160;
 
@@ -307,6 +307,7 @@ function buildGroupSection(group, drawers) {
 function buildGroupsHeader() {
     const head = document.createElement('div');
     head.className = 'emm-groups-head';
+    head.id = 'emm-groups-head';
 
     const title = document.createElement('span');
     title.className = 'emm-groups-title';
@@ -334,6 +335,36 @@ function buildGroupsHeader() {
     actions.append(expand, collapse);
     head.append(title, actions);
     return head;
+}
+
+/**
+ * Keeps the "分组列表" title row docked directly under the tab strip inside the
+ * sticky bar, so it stays visible while the list scrolls. The row lives outside
+ * the scrolling list; its height is fixed so tabs (and their scrollbar) can
+ * never squeeze it.
+ */
+function syncGroupsHeader() {
+    const sticky = document.getElementById('emm-sticky');
+    if (!sticky) return;
+    let head = document.getElementById('emm-groups-head');
+    if (!head) {
+        head = buildGroupsHeader();
+        head.id = 'emm-groups-head';
+    }
+    // The tab strip may sit directly in the sticky bar or one level deep inside
+    // #emm-toolbar; dock right below whichever element actually holds it.
+    const tabsRow = document.getElementById('emm-tabs-row');
+    let anchor = null;
+    if (tabsRow) {
+        if (tabsRow.parentElement === sticky) anchor = tabsRow;
+        else if (tabsRow.parentElement?.parentElement === sticky) anchor = tabsRow.parentElement;
+    }
+    if (anchor) {
+        if (head.previousElementSibling !== anchor) anchor.after(head);
+    } else if (head.parentElement !== sticky) {
+        sticky.append(head);
+    }
+    head.hidden = !settings.grouping;
 }
 
 function setAllGroupsCollapsed(collapsed) {
@@ -392,7 +423,6 @@ function renderGrouped() {
         if (!known.has(drawer)) orphans.push(drawer);
     }
     wrap.textContent = '';
-    wrap.append(buildGroupsHeader());
 
     for (const group of settings.groups) {
         const members = buckets.get(group.id);
@@ -450,8 +480,10 @@ function teardownGrouping() {
     state.groupSignature = '';
     wrap?.remove();
     setNativeRootsHidden(false);
+    syncGroupsHeader();
 }
 function applyGrouping(force = false) {
+    syncGroupsHeader();
     if (settings.grouping && !state.groupingReady) return;
     if (!settings.grouping) {
         if (document.getElementById('emm-groups') || state.origin.size) teardownGrouping();
@@ -2016,6 +2048,7 @@ function bindUi() {
         settings.grouping = ui.groupingToggle.checked;
         saveSettings();
         if (settings.grouping) normalizeGroups();
+        syncGroupsHeader();
         applyGrouping(true);
         renderGroupEditor();
     });
