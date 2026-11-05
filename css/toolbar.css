@@ -34,8 +34,7 @@
 /* ST applies input[type=text] { background: var(--ui-color-sec) !important }
    with a type selector. Fixed day/night palettes must win over that rule;
    auto mode intentionally keeps ST's native input styling. */
-#emm-sticky.emm-theme-day #emm-search.emm-search-input,
-#emm-sticky.emm-theme-night #emm-search.emm-search-input {
+#emm-sticky:is(.emm-theme-day, .emm-theme-night) #emm-search.emm-search-input {
     border-color: var(--emm-border) !important;
     background-color: var(--emm-input-bg) !important;
     color: var(--emm-text) !important;
@@ -46,14 +45,12 @@
     opacity: 1;
 }
 
-#emm-sticky.emm-theme-day #emm-search.emm-search-input::placeholder,
-#emm-sticky.emm-theme-night #emm-search.emm-search-input::placeholder {
+#emm-sticky:is(.emm-theme-day, .emm-theme-night) #emm-search.emm-search-input::placeholder {
     color: var(--emm-muted) !important;
     opacity: 1;
 }
 
-#emm-sticky.emm-theme-day #emm-search.emm-search-input:focus,
-#emm-sticky.emm-theme-night #emm-search.emm-search-input:focus {
+#emm-sticky:is(.emm-theme-day, .emm-theme-night) #emm-search.emm-search-input:focus {
     border-color: var(--emm-accent) !important;
     outline: none;
 }
@@ -180,32 +177,38 @@
 /* Buttons                                                             */
 /* ------------------------------------------------------------------ */
 
-/* One square icon box for the toolbar rows and the group list header; the two
-   classes stay separate because each carries different colour rules. */
-.emm-icon-btn,
-.emm-groups-btn {
-    display: flex;
+/* One square icon control for the toolbar rows and the group list header. It
+   carries its own border, radius and colour: the plugin no longer borrows
+   .menu_button, whose filter: grayscale(0.5) desaturated every glyph and whose
+   theme overrides only won by loading order. */
+.emm-icon-btn {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
     width: 28px;
     height: 28px;
     min-width: 28px;
-    padding: 0;
     margin: 0;
+    padding: 0;
+    border: 1px solid var(--emm-border, transparent);
+    border-radius: 8px;
+    background: var(--emm-button-bg, transparent);
+    color: var(--emm-text, inherit);
+    font-family: inherit;
+    font-size: var(--mainFontSize, inherit);
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s ease;
 }
 
-#emm-sticky .emm-icon-btn,
-#emm-sticky .emm-kebab,
-#emm-sticky .emm-groups-btn {
-    color: var(--emm-text);
-    background: var(--emm-button-bg);
+.emm-icon-btn:hover {
+    background: var(--emm-tab-hover, transparent);
 }
 
-#emm-sticky .emm-icon-btn:hover,
-#emm-sticky .emm-kebab:hover,
-#emm-sticky .emm-groups-btn:hover {
-    background: var(--emm-tab-hover);
+.emm-icon-btn:focus-visible {
+    outline: 2px solid var(--emm-accent, var(--SmartThemeQuoteColor, #a78bfa));
+    outline-offset: 1px;
 }
 
 .emm-icon-btn.emm-disabled {
@@ -236,13 +239,8 @@
     align-items: center;
 }
 
+/* Same box as .emm-icon-btn; only its offset differs. */
 .emm-kebab {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
     margin-left: 2px;
 }
 

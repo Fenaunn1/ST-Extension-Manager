@@ -107,14 +107,17 @@ body.emm-modal-open {
     }
 }
 
-.emm-modal-card {
+.emm-modal-card,
+.emm-confirm-card {
     --emm-m-text: var(--SmartThemeBodyColor, #ddd);
     --emm-m-muted: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 58%, transparent);
     --emm-m-border: var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.3));
     --emm-m-accent: var(--SmartThemeQuoteColor, #a78bfa);
     --emm-m-tint: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 5%, transparent);
     --emm-m-tint-strong: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 10%, transparent);
+}
 
+.emm-modal-card {
     position: relative;
     z-index: 1;
     display: flex;
@@ -167,10 +170,8 @@ body.emm-modal-open {
     border: 0;
     border-radius: 9px;
     font-size: calc(var(--mainFontSize) * 1.16);
-    line-height: 1;
     color: inherit;
     background: transparent;
-    cursor: pointer;
     transition: background 0.12s ease, transform 0.12s ease;
 }
 
@@ -230,7 +231,7 @@ body.emm-modal-open {
     padding: 0 8px;
 }
 
-.emm-modal .emm-add-group .menu_button {
+.emm-modal .emm-add-group .emm-btn {
     flex: 0 0 auto;
     height: 30px;
     min-height: 30px;

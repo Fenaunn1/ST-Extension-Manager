@@ -11,7 +11,7 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.3.12';
+const VERSION = '1.3.13';
 const UNGROUPED_ID = '__ungrouped';
 const MODAL_CLOSE_MS = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 160;
 

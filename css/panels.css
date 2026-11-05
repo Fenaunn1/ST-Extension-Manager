@@ -184,13 +184,6 @@
     flex: 0 0 auto;
 }
 
-/* Same box, radius, border and font as the toolbar icons above: these carry the
-   identical .menu_button base class, so anything set here would drift from them. */
-.emm-groups-btn:focus-visible {
-    outline: 2px solid var(--emm-accent, var(--SmartThemeQuoteColor, #a78bfa));
-    outline-offset: 1px;
-}
-
 .emm-group {
     display: flex;
     flex-direction: column;
@@ -210,7 +203,7 @@
     padding: 4px 2px;
     border: 0;
     background: transparent;
-    color: var(--SmartThemeBodyColor, #ddd);
+    color: var(--emm-text, var(--SmartThemeBodyColor, #ddd));
     font-family: inherit;
     font-size: calc(var(--mainFontSize) * 0.95);
     font-weight: 700;
@@ -219,7 +212,7 @@
 }
 
 .emm-group-head:hover {
-    color: var(--SmartThemeQuoteColor, var(--SmartThemeBodyColor, #ddd));
+    color: var(--emm-accent, var(--SmartThemeQuoteColor, var(--SmartThemeBodyColor, #ddd)));
 }
 
 /* Two glyphs instead of one rotated glyph: the down / right pair is already
@@ -264,7 +257,7 @@
     margin-left: 6px;
     padding: 1px 7px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 10%, transparent);
+    background: color-mix(in srgb, var(--emm-text, var(--SmartThemeBodyColor, #ddd)) 10%, transparent);
     font-size: 0.75em;
     font-variant-numeric: tabular-nums;
     opacity: 0.8;

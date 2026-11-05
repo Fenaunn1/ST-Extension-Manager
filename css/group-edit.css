@@ -341,10 +341,10 @@
     border-top: 1px solid var(--emm-m-border);
 }
 
-/* One metric for every dialog action, in the modal footers and in the confirm
-   bar alike. */
-.emm-modal-foot .menu_button,
-.emm-confirm-actions .menu_button {
+/* Dialog action. Owns its whole box, so it inherits neither .menu_button's
+   filter: grayscale(0.5) nor the theme's background override; the variant rules
+   below therefore sit one class away, not four. */
+.emm-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -354,13 +354,35 @@
     min-height: 32px;
     margin: 0;
     padding: 0 12px;
+    border: 1px solid var(--emm-m-border);
     border-radius: 8px;
+    background: var(--emm-m-tint);
+    color: var(--emm-m-text);
+    font-family: inherit;
+    font-size: var(--mainFontSize, inherit);
+    line-height: 1;
     white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.emm-btn:hover {
+    background: var(--emm-m-tint-strong);
+}
+
+.emm-btn:focus-visible {
+    outline: 2px solid var(--emm-m-accent);
+    outline-offset: 1px;
+}
+
+.emm-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 /* Leading glyphs on the footer actions are nudges, not signals: keep them muted
    so the label still reads first. */
-.emm-modal-foot .menu_button > i:first-child {
+.emm-modal-foot .emm-btn > i:first-child {
     flex: 0 0 auto;
     font-size: calc(var(--mainFontSize) * 0.84);
     opacity: 0.72;
@@ -371,31 +393,28 @@
     justify-content: flex-end;
 }
 
-.emm-groups-foot .menu_button {
+.emm-groups-foot .emm-btn {
     min-width: 0;
     opacity: 0.78;
 }
 
-.emm-groups-foot .menu_button:hover {
+.emm-groups-foot .emm-btn:hover {
     opacity: 1;
 }
 
-.emm-modal .emm-btn-primary,
-.emm-confirm .emm-btn-primary {
-    background: color-mix(in srgb, var(--emm-m-accent) 26%, transparent);
+.emm-btn-primary,
+.emm-btn-primary:hover {
     border-color: color-mix(in srgb, var(--emm-m-accent) 55%, transparent);
     color: var(--emm-m-text);
     font-weight: 600;
 }
 
-.emm-modal .emm-btn-primary:hover,
-.emm-confirm .emm-btn-primary:hover {
-    background: color-mix(in srgb, var(--emm-m-accent) 36%, transparent);
+.emm-btn-primary {
+    background: color-mix(in srgb, var(--emm-m-accent) 26%, transparent);
 }
 
-.emm-modal .emm-add-group .menu_button[disabled] {
-    opacity: 0.45;
-    cursor: not-allowed;
+.emm-btn-primary:hover {
+    background: color-mix(in srgb, var(--emm-m-accent) 36%, transparent);
 }
 
 /* Confirm dialog ----------------------------------------------------- */
@@ -420,9 +439,6 @@
 }
 
 .emm-confirm-card {
-    --emm-m-accent: var(--SmartThemeQuoteColor, #a78bfa);
-    --emm-m-text: var(--SmartThemeBodyColor, #ddd);
-
     position: relative;
     z-index: 1;
     width: min(360px, 100%);
@@ -456,20 +472,22 @@
     margin-top: 14px;
 }
 
-.emm-confirm-actions .menu_button {
+.emm-confirm-actions .emm-btn {
     flex: 0 0 auto;
 }
 
-.emm-modal .emm-btn-danger,
-.emm-confirm .emm-btn-danger {
-    background: #e5484d;
+.emm-btn-danger,
+.emm-btn-danger:hover {
     border-color: #e5484d;
     color: #fff;
     font-weight: 600;
 }
 
-.emm-modal .emm-btn-danger:hover,
-.emm-confirm .emm-btn-danger:hover {
+.emm-btn-danger {
+    background: #e5484d;
+}
+
+.emm-btn-danger:hover {
     background: #d93a3f;
     border-color: #d93a3f;
 }

@@ -3,7 +3,11 @@
 
 /* Extension Manager + — styles for the SillyTavern Extensions drawer. */
 
-#emm-sticky {
+/* Tokens live on both the bar and the drawer: group rows sit in
+   .extensions_block, outside #emm-sticky, and would otherwise resolve every
+   var(--emm-*) to nothing. */
+#emm-sticky,
+#rm_extensions_block {
     --emm-text: var(--SmartThemeBodyColor, #ddd);
     --emm-muted: color-mix(in srgb, var(--emm-text) 55%, transparent);
     --emm-border: color-mix(in srgb, var(--emm-text) 22%, transparent);
@@ -15,7 +19,10 @@
     --emm-popover: var(--SmartThemeBlurTintColor, #202228);
     --emm-shadow: rgba(0, 0, 0, 0.45);
     --emm-button-bg: color-mix(in srgb, var(--emm-text) 6%, transparent);
+    --emm-surface: var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94));
+}
 
+#emm-sticky {
     position: sticky;
     top: 0;
     z-index: 30;
@@ -46,8 +53,8 @@
        pixels, and let the drawer clip the rest: the surface reaches the
        drawer edge without changing any box size. */
     box-shadow:
-        -30px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94))),
-        30px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94)));
+        -30px 0 0 0 var(--emm-surface),
+        30px 0 0 0 var(--emm-surface);
 }
 
 /* Surface layer. It matches the bar's own box exactly, so the hairline can
@@ -57,7 +64,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background-color: var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94)));
+    background-color: var(--emm-surface);
     border-bottom: 1px solid var(--emm-border);
     pointer-events: none;
     z-index: -1;
@@ -94,6 +101,47 @@
     --emm-shadow: rgba(0, 0, 0, 0.55);
     --emm-button-bg: rgba(255, 255, 255, 0.06);
     --emm-surface: #191a1c;
+}
+
+/* Day/night palettes own the whole drawer, not just the bar. Group rows live
+   outside #emm-sticky (they sit in .extensions_block), so they cannot inherit
+   the bar's --emm-* tokens. Instead the drawer root gets the same class and
+   re-points the four SillyTavern theme variables its rows already read.
+   Modals, confirm dialogs and toasts are appended to <body>, outside the
+   drawer, so they are selected with :has() on the drawer state and receive the
+   same values. Custom properties are set only on those three elements, so no
+   other SillyTavern surface is affected. */
+#rm_extensions_block.emm-theme-day,
+body:has(#rm_extensions_block.emm-theme-day) .emm-modal,
+body:has(#rm_extensions_block.emm-theme-day) .emm-confirm,
+body:has(#rm_extensions_block.emm-theme-day) .emm-toast {
+    color-scheme: light;
+    --SmartThemeBodyColor: #1f2937;
+    --SmartThemeQuoteColor: #6d5ce7;
+    --SmartThemeBlurTintColor: #f7f9fc;
+    --SmartThemeBorderColor: rgba(15, 23, 42, 0.16);
+}
+
+#rm_extensions_block.emm-theme-night,
+body:has(#rm_extensions_block.emm-theme-night) .emm-modal,
+body:has(#rm_extensions_block.emm-theme-night) .emm-confirm,
+body:has(#rm_extensions_block.emm-theme-night) .emm-toast {
+    color-scheme: dark;
+    --SmartThemeBodyColor: #e8e8e8;
+    --SmartThemeQuoteColor: #a78bfa;
+    --SmartThemeBlurTintColor: #191a1c;
+    --SmartThemeBorderColor: rgba(255, 255, 255, 0.16);
+}
+
+/* The drawer itself is painted opaque, so plugin panels inside it no longer
+   show the chat behind the drawer. Layers above paint their own backdrop, so
+   only the drawer needs this. */
+#rm_extensions_block.emm-theme-day {
+    background-color: #f7f9fc;
+}
+
+#rm_extensions_block.emm-theme-night {
+    background-color: #191a1c;
 }
 
 /* The drawer's 10px top padding would otherwise stay above the sticky bar and

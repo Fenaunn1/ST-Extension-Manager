@@ -168,16 +168,16 @@ function buildGroupModal() {
                     <div class="emm-add-group">
                         <input id="emm-new-group" class="text_pole" type="text" maxlength="16"
                                placeholder="新分组名称" aria-label="新分组名称">
-                        <button id="emm-add-group-btn" type="button" class="menu_button">添加</button>
+                        <button id="emm-add-group-btn" type="button" class="emm-btn">添加</button>
                     </div>
                     <div id="emm-add-group-error" class="emm-form-error" role="alert" hidden></div>
                     <div id="emm-group-rows"></div>
                 </div>
                 <div class="emm-modal-foot emm-groups-foot">
-                    <button type="button" class="menu_button" data-action="import-groups" title="从 JSON 文件导入分组配置">
+                    <button type="button" class="emm-btn" data-action="import-groups" title="从 JSON 文件导入分组配置">
                         <i class="fa-solid fa-file-import" aria-hidden="true"></i><span>导入</span>
                     </button>
-                    <button type="button" class="menu_button" data-action="export-groups" title="将分组配置导出为 JSON 文件">
+                    <button type="button" class="emm-btn" data-action="export-groups" title="将分组配置导出为 JSON 文件">
                         <i class="fa-solid fa-file-export" aria-hidden="true"></i><span>导出</span>
                     </button>
                 </div>
@@ -321,10 +321,10 @@ function buildGroupEditModal() {
                 </div>
             </div>
             <div class="emm-modal-foot">
-                <button type="button" class="menu_button" data-action="close-edit">
+                <button type="button" class="emm-btn" data-action="close-edit">
                     <i class="fa-solid fa-xmark" aria-hidden="true"></i><span>取消</span>
                 </button>
-                <button type="button" class="menu_button emm-btn-primary" id="emm-edit-save">
+                <button type="button" class="emm-btn emm-btn-primary" id="emm-edit-save">
                     <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i><span>保存</span>
                 </button>
             </div>
@@ -446,8 +446,8 @@ function buildConfirmDialog() {
             <div id="emm-confirm-title" class="emm-confirm-title"></div>
             <div id="emm-confirm-text" class="emm-confirm-text"></div>
             <div class="emm-confirm-actions">
-                <button type="button" class="menu_button" data-action="cancel">取消</button>
-                <button type="button" class="menu_button emm-btn-danger" data-action="ok">删除</button>
+                <button type="button" class="emm-btn" data-action="cancel">取消</button>
+                <button type="button" class="emm-btn emm-btn-danger" data-action="ok">删除</button>
             </div>
         </div>
     `;

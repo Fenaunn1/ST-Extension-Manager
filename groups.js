@@ -139,7 +139,7 @@ function buildGroupsHeader() {
 
     const expand = document.createElement('button');
     expand.type = 'button';
-    expand.className = 'menu_button emm-groups-btn';
+    expand.className = 'emm-icon-btn emm-groups-btn';
     expand.title = '一键展开全部分组';
     expand.setAttribute('aria-label', '一键展开全部分组');
     expand.innerHTML = '<i class="fa-solid fa-angles-down" aria-hidden="true"></i>';
@@ -147,7 +147,7 @@ function buildGroupsHeader() {
 
     const collapse = document.createElement('button');
     collapse.type = 'button';
-    collapse.className = 'menu_button emm-groups-btn';
+    collapse.className = 'emm-icon-btn emm-groups-btn';
     collapse.title = '一键折叠全部分组';
     collapse.setAttribute('aria-label', '一键折叠全部分组');
     collapse.innerHTML = '<i class="fa-solid fa-angles-up" aria-hidden="true"></i>';

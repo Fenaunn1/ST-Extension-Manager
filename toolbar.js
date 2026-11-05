@@ -38,26 +38,26 @@ function buildToolbar() {
                    placeholder="搜索扩展（中/英文名）" autocomplete="off" spellcheck="false"
                    aria-label="搜索扩展">
             <span id="emm-count" class="emm-count" hidden></span>
-            <div id="emm-search-clear" class="menu_button emm-icon-btn" title="清除搜索" hidden>
+            <button type="button" id="emm-search-clear" class="emm-icon-btn" title="清除搜索" hidden>
                 <i class="fa-solid fa-xmark"></i>
-            </div>
+            </button>
         </div>
         <div class="emm-tabs-row" id="emm-tabs-row">
-            <div id="emm-tabs-left" class="menu_button emm-icon-btn emm-tab-arrow" title="向左滚动" hidden>
+            <button type="button" id="emm-tabs-left" class="emm-icon-btn emm-tab-arrow" title="向左滚动" hidden>
                 <i class="fa-solid fa-chevron-left"></i>
-            </div>
+            </button>
             <div id="emm-tabs" class="emm-tabs" role="tablist" aria-label="已展开的扩展"></div>
             <div id="emm-tabs-empty" class="emm-tabs-empty">展开扩展后可在标签间切换</div>
-            <div id="emm-tabs-right" class="menu_button emm-icon-btn emm-tab-arrow" title="向右滚动" hidden>
+            <button type="button" id="emm-tabs-right" class="emm-icon-btn emm-tab-arrow" title="向右滚动" hidden>
                 <i class="fa-solid fa-chevron-right"></i>
-            </div>
-            <div id="emm-collapse-all" class="menu_button emm-icon-btn" title="折叠全部已展开的扩展">
+            </button>
+            <button type="button" id="emm-collapse-all" class="emm-icon-btn" title="折叠全部已展开的扩展">
                 <i class="fa-solid fa-compress"></i>
-            </div>
+            </button>
             <div class="emm-gear-wrap">
-                <div id="emm-settings-btn" class="menu_button emm-icon-btn" title="扩展管理器菜单">
+                <button type="button" id="emm-settings-btn" class="emm-icon-btn" title="扩展管理器菜单">
                     <i class="fa-solid fa-gear"></i>
-                </div>
+                </button>
                 <div id="emm-gear-menu" class="emm-dropdown emm-gear-menu" hidden>
                     <button type="button" class="emm-menu-item" data-action="settings">
                         <i class="fa-solid fa-sliders"></i><span>设置界面</span>
@@ -79,9 +79,9 @@ function buildToolbar() {
     const menuWrap = document.createElement('div');
     menuWrap.className = 'emm-menu-wrap';
     menuWrap.innerHTML = `
-        <div id="emm-kebab" class="menu_button emm-kebab" title="扩展操作">
+        <button type="button" id="emm-kebab" class="emm-icon-btn emm-kebab" title="扩展操作">
             <i class="fa-solid fa-ellipsis"></i>
-        </div>
+        </button>
         <div id="emm-dropdown" class="emm-dropdown" hidden>
             <button type="button" class="emm-menu-item" data-action="manage">
                 <i class="fa-solid fa-cubes"></i><span>管理扩展</span>
