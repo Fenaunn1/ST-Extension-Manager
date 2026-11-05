@@ -14,9 +14,13 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.3.6';
+const VERSION = '1.3.7';
 const UNGROUPED_ID = '__ungrouped';
 const MODAL_CLOSE_MS = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 160;
+/** Group once the settings panel has been unchanged for this long. */
+const SETTLE_QUIET_MS = 800;
+/** Upper bound so a chatty extension cannot postpone grouping forever. */
+const SETTLE_MAX_MS = 12000;
 
 const DEFAULTS = {
     compactActions: true, // fold Manage/Install into the ⋯ menu
@@ -27,7 +31,8 @@ const DEFAULTS = {
     tabLabelClip: true, // clip long tab names; off shows the full title
     barFullBleed: false, // paint the sticky bar edge-to-edge across the drawer
     grouping: false, // show custom groups instead of a flat list
-    groups: [], // [{ id, name, enabled, collapsed, members: [title] }]
+    groups: [], // [{ id, name, enabled, collapsed, members: [key] }]
+    ungroupedCollapsed: false, // collapse state of the implicit "未分组" section
 };
 
 const settings = Object.assign(
@@ -54,6 +59,8 @@ const state = {
     modalKeysBound: false,
     origin: new Map(),
     groupingReady: false,
+    focusStack: [],
+    toastAction: null,
 };
 
 const ui = {};
@@ -148,6 +155,41 @@ function computeTitle(header) {
     return normalize(headerClone.textContent) || '未命名扩展';
 }
 
+/**
+ * Membership key for a drawer. Titles are display text: they change with the
+ * UI language and can be edited or duplicated by an extension, so grouping
+ * stores this key instead. Order matters: a DOM id is the strongest anchor,
+ * then the i18n key, then the title as a last resort.
+ */
+function drawerKey(drawer) {
+    if (drawer.dataset.emmKey) return drawer.dataset.emmKey;
+    let key = '';
+    if (drawer.id) {
+        key = `id:${drawer.id}`;
+    } else {
+        const node = getHeader(drawer)?.querySelector('[data-i18n]');
+        const raw = String(node?.getAttribute('data-i18n') ?? '').replace(/^\[[^\]]+\]/, '').trim();
+        if (raw) key = `i18n:${raw}`;
+    }
+    if (!key) key = `title:${getTitle(drawer)}`;
+    drawer.dataset.emmKey = key;
+    return key;
+}
+
+function keyTitle(key) {
+    for (const drawer of getDrawers()) {
+        if (drawerKey(drawer) === key) return getTitle(drawer);
+    }
+    return String(key ?? '').replace(/^(id|i18n|title):/, '');
+}
+
+/** Title -> key for every drawer currently in the DOM. */
+function titleKeyMap() {
+    const map = new Map();
+    for (const drawer of getDrawers()) map.set(getTitle(drawer), drawerKey(drawer));
+    return map;
+}
+
 function isDrawerOpen(drawer) {
     const icon = drawer.querySelector(':scope > .inline-drawer-header .inline-drawer-icon');
     if (icon) return icon.classList.contains('up');
@@ -180,6 +222,8 @@ function saveSettings() {
     saveSettingsDebounced();
 }
 
+const KEY_PREFIX = /^(id|i18n|title):/;
+
 function normalizeGroups() {
     if (!Array.isArray(settings.groups)) settings.groups = [];
     const seen = new Set();
@@ -198,18 +242,29 @@ function normalizeGroups() {
             };
         });
 
+    // Groups used to store drawer titles. Convert those to stable keys once;
+    // a title that no drawer matches right now becomes a title key so it still
+    // resolves if that extension loads later.
+    const byTitle = titleKeyMap();
+    for (const group of settings.groups) {
+        group.members = group.members.map(member => {
+            if (KEY_PREFIX.test(member)) return member;
+            return byTitle.get(member) ?? `title:${member}`;
+        });
+    }
+
     const claimed = new Set();
     for (const group of settings.groups) {
-        group.members = group.members.filter(title => {
-            if (claimed.has(title)) return false;
-            claimed.add(title);
+        group.members = group.members.filter(key => {
+            if (claimed.has(key)) return false;
+            claimed.add(key);
             return true;
         });
     }
 }
 
-function findGroupForTitle(title) {
-    return settings.groups.find(group => group.members.includes(title)) ?? null;
+function findGroupForKey(key) {
+    return settings.groups.find(group => group.members.includes(key)) ?? null;
 }
 
 function groupNameExists(name, exceptId = null) {
@@ -253,7 +308,7 @@ function setNativeRootsHidden(hidden) {
 }
 
 function groupSignature() {
-    const titles = getDrawers().map(drawer => getTitle(drawer)).join('\u0001');
+    const titles = getDrawers().map(drawer => drawerKey(drawer)).join('\u0001');
     const groups = settings.groups
         .map(group => [group.id, group.enabled ? 1 : 0, group.name, group.members.join(',')].join(':'))
         .join('\u0002');
@@ -276,14 +331,16 @@ function buildGroupSection(group, drawers) {
     `;
     head.querySelector('.emm-group-name').textContent = group.name;
     head.querySelector('.emm-group-count').textContent = String(drawers.length);
+    head.setAttribute('aria-expanded', String(!group.collapsed));
     head.addEventListener('click', () => {
         const collapsed = section.classList.toggle('emm-collapsed');
+        head.setAttribute('aria-expanded', String(!collapsed));
         if (group.id === UNGROUPED_ID) {
-            state.ungroupedCollapsed = collapsed;
+            settings.ungroupedCollapsed = collapsed;
         } else {
             group.collapsed = collapsed;
-            saveSettings();
         }
+        saveSettings();
     });
 
     const body = document.createElement('div');
@@ -372,10 +429,11 @@ function setAllGroupsCollapsed(collapsed) {
     const wrap = document.getElementById('emm-groups');
     if (!wrap) return;
     for (const group of settings.groups) group.collapsed = collapsed;
-    state.ungroupedCollapsed = collapsed;
+    settings.ungroupedCollapsed = collapsed;
     saveSettings();
     for (const section of wrap.querySelectorAll('.emm-group')) {
         section.classList.toggle('emm-collapsed', collapsed);
+        section.querySelector('.emm-group-head')?.setAttribute('aria-expanded', String(!collapsed));
     }
 }
 
@@ -384,6 +442,7 @@ function renderGrouped() {
     if (!wrap) return;
 
     const all = getDrawers();
+    const keys = new Map(all.map(drawer => [drawer, drawerKey(drawer)]));
     if (!state.baseOrder) state.baseOrder = new Map();
     let seq = state.baseOrder.size;
     for (const drawer of all) {
@@ -402,7 +461,7 @@ function renderGrouped() {
             ungrouped.push(drawer);
             continue;
         }
-        const group = findGroupForTitle(getTitle(drawer));
+        const group = findGroupForKey(keys.get(drawer));
         if (group && group.enabled) {
             buckets.get(group.id).push(drawer);
         } else if (group && !group.enabled) {
@@ -427,12 +486,24 @@ function renderGrouped() {
 
     for (const group of settings.groups) {
         const members = buckets.get(group.id);
-        if (members?.length) wrap.append(buildGroupSection(group, members));
+        if (!members?.length) continue;
+        // Membership order is user-defined (drag to reorder) and falls back to
+        // the order the drawers appeared in.
+        members.sort((a, b) => {
+            const rank = member => {
+                const index = group.members.indexOf(keys.get(member));
+                return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+            };
+            return rank(a) - rank(b);
+        });
+        wrap.append(buildGroupSection(group, members));
     }
 
     if (ungrouped.length) {
-        const section = buildGroupSection({ id: UNGROUPED_ID, name: '未分组' }, ungrouped);
-        if (state.ungroupedCollapsed) section.classList.add('emm-collapsed');
+        const section = buildGroupSection(
+            { id: UNGROUPED_ID, name: '未分组', collapsed: !!settings.ungroupedCollapsed },
+            ungrouped,
+        );
         wrap.append(section);
     }
 
@@ -554,19 +625,24 @@ function applyBuiltinVisibility() {
         ?.classList.toggle('emm-hide-builtins', !!settings.hideBuiltins);
 }
 
-function editableTitles() {
+/** Groupable drawers as { key, title } pairs, one entry per stable key. */
+function editablePlugins() {
     const seen = new Set();
-    const titles = [];
+    const plugins = [];
     for (const drawer of getDrawers()) {
         if (drawer.id === 'emm-settings-drawer') continue;
         // Built-in sections are not extensions and cannot be grouped.
         if (drawer.dataset.emmBuiltin === 'assets' || drawer.closest('#assets_container')) continue;
-        const title = getTitle(drawer);
-        if (seen.has(title)) continue;
-        seen.add(title);
-        titles.push(title);
+        const key = drawerKey(drawer);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        plugins.push({ key, title: getTitle(drawer) });
     }
-    return titles;
+    return plugins;
+}
+
+function editableTitles() {
+    return editablePlugins().map(plugin => plugin.title);
 }
 
 function groupEditorSignature() {
@@ -586,6 +662,14 @@ function buildGroupManagerItem(group) {
 
     const row = document.createElement('div');
     row.className = 'emm-mg-row';
+
+    const grip = document.createElement('button');
+    grip.type = 'button';
+    grip.className = 'emm-mg-grip';
+    grip.title = '拖动调整分组顺序';
+    grip.setAttribute('aria-label', `拖动调整分组 ${group.name} 的顺序`);
+    grip.innerHTML = '<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>';
+    grip.draggable = true;
 
     const caret = document.createElement('button');
     caret.type = 'button';
@@ -634,12 +718,13 @@ function buildGroupManagerItem(group) {
     remove.innerHTML = '<i class="fa-solid fa-trash-can" aria-hidden="true"></i>';
     remove.addEventListener('click', () => requestDeleteGroup(group));
 
-    row.append(caret, name, switchLabel, edit, remove);
+    row.append(grip, caret, name, switchLabel, edit, remove);
 
     const body = document.createElement('div');
     body.className = 'emm-mg-members';
     if (group.members.length) {
-        for (const title of group.members) {
+        for (const key of group.members) {
+            const title = keyTitle(key);
             const chip = document.createElement('span');
             chip.className = 'emm-chip';
             chip.textContent = title;
@@ -687,8 +772,73 @@ function renderGroupEditor(force = false) {
         host.append(empty);
     } else {
         for (const group of settings.groups) host.append(buildGroupManagerItem(group));
+        bindGroupRowDrag(host);
     }
     if (body) body.scrollTop = scrollTop;
+}
+
+/**
+ * Reorder the group list by dragging a row's grip. Rows are rebuilt after a
+ * drop, so the hook is re-attached on every render.
+ */
+function bindGroupRowDrag(host) {
+    let draggedId = null;
+    const clearMarks = () => {
+        host.querySelectorAll('.emm-mg-item').forEach(item => {
+            item.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after');
+        });
+    };
+
+    host.querySelectorAll('.emm-mg-item').forEach(item => {
+        const grip = item.querySelector('.emm-mg-grip');
+        grip?.addEventListener('dragstart', event => {
+            draggedId = item.dataset.groupId;
+            item.classList.add('is-dragging');
+            event.dataTransfer?.setData('text/plain', draggedId ?? '');
+            if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+        });
+        grip?.addEventListener('dragend', () => {
+            draggedId = null;
+            clearMarks();
+        });
+
+        item.addEventListener('dragover', event => {
+            if (!draggedId || draggedId === item.dataset.groupId) return;
+            event.preventDefault();
+            const rect = item.getBoundingClientRect();
+            const after = event.clientY > rect.top + rect.height / 2;
+            item.classList.toggle('is-drop-before', !after);
+            item.classList.toggle('is-drop-after', after);
+        });
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('is-drop-before', 'is-drop-after');
+        });
+        item.addEventListener('drop', event => {
+            if (!draggedId || draggedId === item.dataset.groupId) return;
+            event.preventDefault();
+            const rect = item.getBoundingClientRect();
+            const after = event.clientY > rect.top + rect.height / 2;
+            moveGroup(draggedId, item.dataset.groupId, after);
+            draggedId = null;
+            clearMarks();
+        });
+    });
+}
+
+function moveGroup(sourceId, targetId, after) {
+    const sourceIndex = settings.groups.findIndex(group => group.id === sourceId);
+    if (sourceIndex === -1) return;
+    const [moved] = settings.groups.splice(sourceIndex, 1);
+    let targetIndex = settings.groups.findIndex(group => group.id === targetId);
+    if (targetIndex === -1) {
+        settings.groups.splice(sourceIndex, 0, moved);
+        return;
+    }
+    if (after) targetIndex += 1;
+    settings.groups.splice(targetIndex, 0, moved);
+    saveSettings();
+    renderGroupEditor(true);
+    applyGrouping(true);
 }
 
 function openGroupEditor(groupId) {
@@ -697,8 +847,8 @@ function openGroupEditor(groupId) {
     if (!group) return;
 
     const assign = new Map();
-    for (const title of editableTitles()) {
-        assign.set(title, findGroupForTitle(title)?.id ?? null);
+    for (const { key } of editablePlugins()) {
+        assign.set(key, findGroupForKey(key)?.id ?? null);
     }
 
     state.edit = {
@@ -743,9 +893,9 @@ function currentEditGroup() {
     return settings.groups.find(item => item.id === edit.groupId) ?? null;
 }
 
-function renderBoundList(titles, host) {
+function renderBoundList(keys, host) {
     host.textContent = '';
-    if (!titles.length) {
+    if (!keys.length) {
         const empty = document.createElement('span');
         empty.className = 'emm-bound-empty';
         empty.textContent = '还没有插件，从下方列表点 + 加入';
@@ -753,10 +903,13 @@ function renderBoundList(titles, host) {
         return;
     }
 
-    for (const title of titles) {
+    for (const key of keys) {
+        const title = keyTitle(key);
         const chip = document.createElement('span');
         chip.className = 'emm-bound-chip';
-        chip.title = title;
+        chip.title = `${title}（拖动可调整顺序）`;
+        chip.draggable = true;
+        chip.dataset.key = key;
 
         const name = document.createElement('span');
         name.className = 'emm-bound-name';
@@ -768,11 +921,90 @@ function renderBoundList(titles, host) {
         remove.title = '移出本分组';
         remove.setAttribute('aria-label', `将 ${title} 移出本分组`);
         remove.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
-        remove.addEventListener('click', () => unbindTitleFromGroup(title));
+        remove.addEventListener('click', () => unbindKeyFromGroup(key));
 
         chip.append(name, remove);
         host.append(chip);
     }
+    bindChipDrag(host);
+}
+
+/** Reorder bound members within the edited group by dragging their chips. */
+function bindChipDrag(host) {
+    let draggedKey = null;
+    const clearMarks = () => {
+        host.querySelectorAll('.emm-bound-chip').forEach(chip => {
+            chip.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after');
+        });
+    };
+
+    host.querySelectorAll('.emm-bound-chip').forEach(chip => {
+        chip.addEventListener('dragstart', event => {
+            draggedKey = chip.dataset.key;
+            chip.classList.add('is-dragging');
+            event.dataTransfer?.setData('text/plain', draggedKey ?? '');
+            if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+        });
+        chip.addEventListener('dragend', () => {
+            draggedKey = null;
+            clearMarks();
+        });
+        chip.addEventListener('dragover', event => {
+            if (!draggedKey || draggedKey === chip.dataset.key) return;
+            event.preventDefault();
+            const rect = chip.getBoundingClientRect();
+            const after = event.clientX > rect.left + rect.width / 2;
+            chip.classList.toggle('is-drop-before', !after);
+            chip.classList.toggle('is-drop-after', after);
+        });
+        chip.addEventListener('dragleave', () => {
+            chip.classList.remove('is-drop-before', 'is-drop-after');
+        });
+        chip.addEventListener('drop', event => {
+            if (!draggedKey || draggedKey === chip.dataset.key) return;
+            event.preventDefault();
+            const rect = chip.getBoundingClientRect();
+            const after = event.clientX > rect.left + rect.width / 2;
+            reorderBoundKey(draggedKey, chip.dataset.key, after);
+            draggedKey = null;
+            clearMarks();
+        });
+    });
+}
+
+/**
+ * Members are reordered in the staged map, so the new order only reaches
+ * settings on Save. The map keeps insertion order, which saveGroupEditor
+ * replays into group.members.
+ */
+function reorderBoundKey(sourceKey, targetKey, after) {
+    const edit = state.edit;
+    if (!edit) return;
+    const group = currentEditGroup();
+    if (!group) return;
+    const order = [...edit.assign.entries()];
+    const bound = order.filter(([, ownerId]) => ownerId === group.id).map(([key]) => key);
+    const from = bound.indexOf(sourceKey);
+    if (from === -1) return;
+    bound.splice(from, 1);
+    let to = bound.indexOf(targetKey);
+    if (to === -1) return;
+    if (after) to += 1;
+    bound.splice(to, 0, sourceKey);
+
+    // Rebuild the map: every non-bound entry keeps its place, bound entries
+    // are replayed in their new order behind the same owner.
+    const next = new Map();
+    let cursor = 0;
+    for (const [key, ownerId] of order) {
+        if (ownerId === group.id) {
+            next.set(bound[cursor++], ownerId);
+        } else {
+            next.set(key, ownerId);
+        }
+    }
+    edit.assign = next;
+    renderGroupPicker();
 }
 
 /**
@@ -787,26 +1019,27 @@ function renderGroupPicker() {
     if (!edit || !list || !boundList) return;
     if (edit.tab !== 'ungrouped' && edit.tab !== 'other') edit.tab = 'ungrouped';
 
-    for (const title of editableTitles()) {
-        if (edit.assign.has(title)) continue;
-        const ownerId = findGroupForTitle(title)?.id ?? null;
-        edit.assign.set(title, ownerId);
-        edit.baseAssign?.set(title, ownerId);
+    for (const { key } of editablePlugins()) {
+        if (edit.assign.has(key)) continue;
+        const ownerId = findGroupForKey(key)?.id ?? null;
+        edit.assign.set(key, ownerId);
+        edit.baseAssign?.set(key, ownerId);
     }
 
     const bound = [];
     const ungrouped = [];
     const other = [];
-    for (const [title, ownerId] of edit.assign) {
-        if (ownerId === edit.groupId) bound.push(title);
-        else if (ownerId) other.push([title, ownerId]);
-        else ungrouped.push(title);
+    for (const [key, ownerId] of edit.assign) {
+        if (ownerId === edit.groupId) bound.push(key);
+        else if (ownerId) other.push([key, ownerId]);
+        else ungrouped.push(key);
     }
 
     for (const tab of document.querySelectorAll('#emm-group-edit .emm-picker-tab')) {
         const isActive = tab.dataset.tab === edit.tab;
         tab.classList.toggle('is-active', isActive);
         tab.setAttribute('aria-selected', String(isActive));
+        tab.setAttribute('tabindex', isActive ? '0' : '-1');
     }
     const counts = {
         bound: document.querySelector('#emm-group-edit [data-count="bound"]'),
@@ -824,7 +1057,7 @@ function renderGroupPicker() {
 
     const entries = edit.tab === 'other'
         ? other
-        : ungrouped.map(title => [title, null]);
+        : ungrouped.map(key => [key, null]);
 
     if (!entries.length) {
         const empty = document.createElement('div');
@@ -835,7 +1068,8 @@ function renderGroupPicker() {
         return;
     }
 
-    for (const [title, ownerId] of entries) {
+    for (const [key, ownerId] of entries) {
+        const title = keyTitle(key);
         const row = document.createElement('div');
         row.className = 'emm-pick';
 
@@ -860,7 +1094,7 @@ function renderGroupPicker() {
         bind.title = '绑定到本分组';
         bind.setAttribute('aria-label', `将 ${title} 绑定到本分组`);
         bind.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
-        bind.addEventListener('click', () => bindTitleToGroup(title, ownerId));
+        bind.addEventListener('click', () => bindKeyToGroup(key));
         row.append(bind);
 
         list.append(row);
@@ -869,20 +1103,21 @@ function renderGroupPicker() {
 }
 
 /** Staged in state.edit.assign; nothing is written until Save, so no confirm. */
-function bindTitleToGroup(title) {
+function bindKeyToGroup(key) {
     const edit = state.edit;
     const group = currentEditGroup();
     if (!edit || !group) return;
 
-    edit.assign.set(title, group.id);
+    edit.assign.set(key, group.id);
     renderGroupPicker();
 }
 
-async function unbindTitleFromGroup(title) {
+async function unbindKeyFromGroup(key) {
     const edit = state.edit;
     const group = currentEditGroup();
     if (!edit || !group) return;
 
+    const title = keyTitle(key);
     const ok = await askConfirm({
         title: '移出插件',
         message: `将「${title}」从「${group.name}」移出？移出后回到未分组。`,
@@ -891,7 +1126,7 @@ async function unbindTitleFromGroup(title) {
     });
     if (!ok || state.edit !== edit || !settings.groups.includes(group)) return;
 
-    edit.assign.set(title, null);
+    edit.assign.set(key, null);
     renderGroupPicker();
 }
 
@@ -918,12 +1153,12 @@ function saveGroupEditor() {
     // right now instead of silently dropping them.
     const tracked = new Set(edit.assign.keys());
     for (const item of settings.groups) {
-        item.members = item.members.filter(title => !tracked.has(title));
+        item.members = item.members.filter(key => !tracked.has(key));
     }
-    for (const [title, ownerId] of edit.assign) {
+    for (const [key, ownerId] of edit.assign) {
         if (!ownerId) continue;
         const owner = settings.groups.find(item => item.id === ownerId);
-        if (owner && !owner.members.includes(title)) owner.members.push(title);
+        if (owner && !owner.members.includes(key)) owner.members.push(key);
     }
 
     normalizeGroups();
@@ -946,9 +1181,12 @@ function isGroupEditDirty() {
 
     const base = edit.baseAssign;
     if (!base || base.size !== edit.assign.size) return true;
-    for (const [title, ownerId] of edit.assign) {
-        if (!base.has(title)) return true;
-        if (base.get(title) !== ownerId) return true;
+    // Compare as ordered pairs: reordering bound members alone is a change.
+    const next = [...edit.assign.entries()];
+    const prev = [...base.entries()];
+    for (let i = 0; i < next.length; i += 1) {
+        if (next[i][0] !== prev[i][0]) return true;
+        if (next[i][1] !== prev[i][1]) return true;
     }
     return false;
 }
@@ -992,13 +1230,128 @@ async function requestDeleteGroup(group) {
     });
     if (!ok) return;
 
+    // Keep enough state to put the group back exactly where it was.
+    const index = settings.groups.findIndex(item => item.id === group.id);
+    const removed = { ...group, members: [...group.members] };
+    const expanded = state.expandedGroups.has(group.id);
+
     settings.groups = settings.groups.filter(item => item.id !== group.id);
     state.expandedGroups.delete(group.id);
     if (state.edit?.groupId === group.id) closeGroupEditModal();
     saveSettings();
     renderGroupEditor(true);
     applyGrouping(true);
-    showToast(`已删除分组「${group.name}」`);
+
+    showToast(`已删除分组「${removed.name}」`, {
+        actionLabel: '撤销',
+        actionHandler: () => {
+            if (settings.groups.some(item => item.id === removed.id)) return;
+            settings.groups.splice(Math.max(0, index), 0, removed);
+            if (expanded) state.expandedGroups.add(removed.id);
+            saveSettings();
+            renderGroupEditor(true);
+            applyGrouping(true);
+            showToast(`已恢复分组「${removed.name}」`);
+        },
+    });
+}
+
+/** Plain-text clipboard write with a fallback for non-secure contexts. */
+async function writeClipboard(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        const node = document.createElement('textarea');
+        node.value = text;
+        node.setAttribute('readonly', '');
+        node.style.position = 'fixed';
+        node.style.opacity = '0';
+        document.body.appendChild(node);
+        node.select();
+        let ok = false;
+        try {
+            ok = document.execCommand('copy');
+        } catch {
+            ok = false;
+        }
+        node.remove();
+        return ok;
+    }
+}
+
+async function readClipboard() {
+    try {
+        return await navigator.clipboard.readText();
+    } catch {
+        return '';
+    }
+}
+
+async function copyGroupsConfig() {
+    normalizeGroups();
+    const payload = {
+        app: 'extension-manager',
+        version: VERSION,
+        groups: settings.groups,
+        ungroupedCollapsed: !!settings.ungroupedCollapsed,
+    };
+    const ok = await writeClipboard(JSON.stringify(payload, null, 2));
+    showToast(ok
+        ? `已复制 ${settings.groups.length} 个分组的配置`
+        : '复制失败，浏览器拒绝了剪贴板访问');
+}
+
+/** Validate an imported payload; returns null when it is not usable. */
+function parseGroupsConfig(text) {
+    let data;
+    try {
+        data = JSON.parse(String(text ?? ''));
+    } catch {
+        return null;
+    }
+    const raw = Array.isArray(data) ? data : data?.groups;
+    if (!Array.isArray(raw)) return null;
+    const groups = raw
+        .filter(item => item && typeof item === 'object')
+        .map(item => ({
+            id: String(item.id ?? `g${Date.now().toString(36)}`),
+            name: normalize(item.name),
+            enabled: item.enabled !== false,
+            collapsed: !!item.collapsed,
+            members: Array.isArray(item.members) ? item.members.map(String) : [],
+        }))
+        .filter(group => group.name);
+    return groups.length ? { groups, ungroupedCollapsed: !!data?.ungroupedCollapsed } : null;
+}
+
+async function importGroupsConfig() {
+    const text = await readClipboard();
+    if (!normalize(text)) {
+        showToast('剪贴板是空的，先复制一份分组配置');
+        return;
+    }
+    const parsed = parseGroupsConfig(text);
+    if (!parsed) {
+        showToast('剪贴板内容不是有效的分组配置');
+        return;
+    }
+    const ok = await askConfirm({
+        title: '导入分组配置',
+        message: `将用 ${parsed.groups.length} 个分组替换当前的 ${settings.groups.length} 个分组，确定导入吗？`,
+        confirmText: '导入',
+        danger: true,
+    });
+    if (!ok) return;
+
+    settings.groups = parsed.groups;
+    settings.ungroupedCollapsed = parsed.ungroupedCollapsed;
+    state.expandedGroups.clear();
+    normalizeGroups();
+    saveSettings();
+    renderGroupEditor(true);
+    applyGrouping(true);
+    showToast(`已导入 ${settings.groups.length} 个分组`);
 }
 
 function addGroup(rawName) {
@@ -1303,6 +1656,9 @@ function openModalLayer(layer) {
     layer.__emmCloseCallbacks = [];
     layer.classList.remove('emm-closing');
     layer.hidden = false;
+    // Remember what had focus so closing returns the user where they were.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && !layer.contains(active)) state.focusStack.push(active);
 }
 
 function closeModalLayer(layer, done) {
@@ -1328,7 +1684,71 @@ function closeModalLayer(layer, done) {
         const callbacks = layer.__emmCloseCallbacks ?? [];
         layer.__emmCloseCallbacks = [];
         for (const callback of callbacks) callback();
+        restoreModalFocus();
     }, MODAL_CLOSE_MS);
+}
+
+/** Focus the element that had it before the top-most layer opened. */
+function restoreModalFocus() {
+    while (state.focusStack.length) {
+        const node = state.focusStack.pop();
+        if (node?.isConnected) {
+            node.focus?.();
+            return;
+        }
+    }
+}
+
+const FOCUSABLE = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled]):not([type="hidden"])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+/** Visible, tabbable descendants of the open layer, in DOM order. */
+function focusableIn(layer) {
+    if (!layer) return [];
+    return [...layer.querySelectorAll(FOCUSABLE)].filter(node => {
+        if (node.closest('[hidden]')) return false;
+        return node.getClientRects().length > 0;
+    });
+}
+
+/** Top-most open modal layer, or null. */
+function topModalLayer() {
+    const layers = ['#emm-confirm', '#emm-group-edit', '#emm-group-modal']
+        .map(selector => document.querySelector(selector))
+        .filter(layer => layer && !layer.hidden);
+    return layers[0] ?? null;
+}
+
+/** Keep Tab and Shift+Tab inside the open dialog. */
+function trapModalFocus(event) {
+    if (event.key !== 'Tab') return;
+    const layer = topModalLayer();
+    if (!layer) return;
+    const items = focusableIn(layer);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (!layer.contains(active)) {
+        event.preventDefault();
+        first.focus();
+        return;
+    }
+    if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+        return;
+    }
+    if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+    }
 }
 
 /**
@@ -1367,12 +1787,19 @@ function buildGroupModal() {
                     <div id="emm-add-group-error" class="emm-form-error" role="alert" hidden></div>
                     <div id="emm-group-rows"></div>
                 </div>
+                <div class="emm-modal-foot emm-groups-foot">
+                    <button type="button" class="menu_button" data-action="copy-groups">复制配置</button>
+                    <button type="button" class="menu_button" data-action="import-groups">从剪贴板导入</button>
+                </div>
             </div>
         `;
         document.body.appendChild(modal);
         shieldDrawerEvents(modal);
         modal.addEventListener('click', event => {
-            if (event.target.closest('[data-action="close"]')) closeGroupModal();
+            const action = event.target.closest('[data-action]')?.dataset.action;
+            if (action === 'close') closeGroupModal();
+            else if (action === 'copy-groups') copyGroupsConfig();
+            else if (action === 'import-groups') importGroupsConfig();
         });
 
         const newGroup = /** @type {HTMLInputElement} */ (document.getElementById('emm-new-group'));
@@ -1424,6 +1851,10 @@ function buildGroupModal() {
     if (!state.modalKeysBound) {
         state.modalKeysBound = true;
         document.addEventListener('keydown', event => {
+            if (event.key === 'Tab') {
+                trapModalFocus(event);
+                return;
+            }
             if (event.key !== 'Escape') return;
             if (state.confirm) {
                 event.preventDefault();
@@ -1482,15 +1913,18 @@ function buildGroupEditModal() {
                         <span class="emm-field-label">添加插件</span>
                         <span class="emm-picker-hint">点 + 绑定到本分组；标签上的 × 可移出</span>
                     </div>
-                    <div class="emm-picker-tabs" role="tablist">
-                        <button type="button" class="emm-picker-tab is-active" data-tab="ungrouped" role="tab">
+                    <div class="emm-picker-tabs" role="tablist" aria-label="插件来源">
+                        <button type="button" class="emm-picker-tab is-active" data-tab="ungrouped" role="tab"
+                                aria-selected="true" tabindex="0" aria-controls="emm-picker-list">
                             未分组<span class="emm-pill" data-count="ungrouped">0</span>
                         </button>
-                        <button type="button" class="emm-picker-tab" data-tab="other" role="tab">
+                        <button type="button" class="emm-picker-tab" data-tab="other" role="tab"
+                                aria-selected="false" tabindex="-1" aria-controls="emm-picker-list">
                             其他分组<span class="emm-pill" data-count="other">0</span>
                         </button>
                     </div>
-                    <div id="emm-picker-list" class="emm-picker-list" aria-label="扩展插件列表"></div>
+                    <div id="emm-picker-list" class="emm-picker-list" role="tabpanel"
+                         aria-label="扩展插件列表"></div>
                 </div>
             </div>
             <div class="emm-modal-foot">
@@ -1504,11 +1938,27 @@ function buildGroupEditModal() {
     modal.addEventListener('click', event => {
         if (event.target.closest('[data-action="close-edit"]')) requestCloseGroupEditor();
     });
-    modal.querySelectorAll('.emm-picker-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            if (!state.edit) return;
-            state.edit.tab = tab.dataset.tab === 'other' ? 'other' : 'ungrouped';
-            renderGroupPicker();
+    const tabs = [...modal.querySelectorAll('.emm-picker-tab')];
+    const selectTab = (tab, focus = false) => {
+        if (!state.edit || !tab) return;
+        state.edit.tab = tab.dataset.tab === 'other' ? 'other' : 'ungrouped';
+        // Roving tabindex: only the selected tab is in the tab order.
+        for (const item of tabs) {
+            const active = item === tab;
+            item.setAttribute('aria-selected', String(active));
+            item.setAttribute('tabindex', active ? '0' : '-1');
+        }
+        if (focus) tab.focus();
+        renderGroupPicker();
+    };
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => selectTab(tab));
+        tab.addEventListener('keydown', event => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            const step = event.key === 'ArrowRight' ? 1 : -1;
+            const next = tabs[(index + step + tabs.length) % tabs.length];
+            selectTab(next, true);
         });
     });
     document.getElementById('emm-edit-save')?.addEventListener('click', saveGroupEditor);
@@ -1526,7 +1976,7 @@ function buildGroupEditModal() {
  * Non-interactive toast: confirms a save without stealing focus or asking
  * for a click. Reused so repeated saves restart the same bubble.
  */
-function showToast(message) {
+function showToast(message, options = {}) {
     let layer = document.getElementById('emm-toast');
     if (!layer) {
         layer = document.createElement('div');
@@ -1541,22 +1991,50 @@ function showToast(message) {
     const text = layer.querySelector('.emm-toast-text');
     if (text) text.textContent = message;
 
+    // The action button is built on demand so a plain toast keeps its markup.
+    let action = layer.querySelector('.emm-toast-action');
+    if (!action) {
+        action = document.createElement('button');
+        action.type = 'button';
+        action.className = 'emm-toast-action';
+        layer.querySelector('.emm-toast-bubble')?.append(action);
+    }
+    const label = normalize(options.actionLabel);
+    const handler = typeof options.actionHandler === 'function' ? options.actionHandler : null;
+    const run = label && typeof handler === 'function' ? handler : null;
+    state.toastAction = run;
+    action.hidden = !run;
+    action.textContent = label;
+    action.addEventListener('click', () => {
+        const pending = state.toastAction;
+        state.toastAction = null;
+        hideToast();
+        pending?.();
+    });
+
     if (layer.__emmToastTimer) clearTimeout(layer.__emmToastTimer);
     layer.classList.remove('is-hiding');
     layer.hidden = false;
     // Force a reflow so a restart replays the entrance animation.
     void layer.offsetWidth;
     layer.classList.add('is-visible');
+    // A toast carrying an action stays long enough to be clicked.
+    layer.__emmToastTimer = setTimeout(hideToast, run ? 6000 : 1800);
+}
 
-    layer.__emmToastTimer = setTimeout(() => {
-        layer.__emmToastTimer = 0;
-        layer.classList.add('is-hiding');
-        layer.classList.remove('is-visible');
-        setTimeout(() => {
-            if (!layer.classList.contains('is-visible')) layer.hidden = true;
-            layer.classList.remove('is-hiding');
-        }, 200);
-    }, 1800);
+function hideToast() {
+    const layer = document.getElementById('emm-toast');
+    if (!layer) return;
+    if (layer.__emmToastTimer) clearTimeout(layer.__emmToastTimer);
+    layer.__emmToastTimer = 0;
+    layer.classList.add('is-hiding');
+    layer.classList.remove('is-visible');
+    setTimeout(() => {
+        const current = document.getElementById('emm-toast');
+        if (!current || current.classList.contains('is-visible')) return;
+        current.hidden = true;
+        current.classList.remove('is-hiding');
+    }, 200);
 }
 
 function buildConfirmDialog() {
@@ -2149,6 +2627,45 @@ function onScroll() {
     });
 }
 
+/**
+ * Wait until the settings containers stop changing, then group for the first
+ * time. Late extensions (e.g. the MVU variable framework) inject their drawer
+ * seconds after boot and look up an existing drawer as an anchor, so grouping
+ * too early breaks them. Listening for quiet is more accurate than a fixed
+ * delay and groups sooner on fast installs.
+ */
+function groupWhenSettled() {
+    const roots = ['#extensions_settings', '#extensions_settings2']
+        .map(selector => document.querySelector(selector))
+        .filter(Boolean);
+    state.groupingReady = false;
+    if (!roots.length) {
+        state.groupingReady = true;
+        applyGrouping(true);
+        return;
+    }
+
+    let quietTimer = 0;
+    let deadline = 0;
+    let finished = false;
+    const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(quietTimer);
+        clearTimeout(deadline);
+        watcher.disconnect();
+        state.groupingReady = true;
+        applyGrouping(true);
+    };
+    const watcher = new MutationObserver(() => {
+        clearTimeout(quietTimer);
+        quietTimer = setTimeout(finish, SETTLE_QUIET_MS);
+    });
+    for (const root of roots) watcher.observe(root, { childList: true });
+    quietTimer = setTimeout(finish, SETTLE_QUIET_MS);
+    deadline = setTimeout(finish, SETTLE_MAX_MS);
+}
+
 function observeSettings() {
     if (state.observer) state.observer.disconnect();
     state.observer = new MutationObserver(() => scheduleRefresh(150));
@@ -2172,19 +2689,8 @@ function init() {
     updateLayout();
     refresh();
 
-    if (settings.grouping) {
-        // Some extensions (e.g. the MVU variable framework) inject their
-        // settings drawer several seconds after boot and look up an existing
-        // drawer as an anchor. Grouping empties that container, so wait for
-        // those late drawers before the first regroup.
-        state.groupingReady = false;
-        setTimeout(() => {
-            state.groupingReady = true;
-            applyGrouping(true);
-        }, 4000);
-    } else {
-        state.groupingReady = true;
-    }
+    if (settings.grouping) groupWhenSettled();
+    else state.groupingReady = true;
 
     console.log(`[${MODULE_NAME}] ready (v${VERSION})`);
     return true;
