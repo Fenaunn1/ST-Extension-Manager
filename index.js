@@ -14,7 +14,7 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.3.3';
+const VERSION = '1.3.4';
 const UNGROUPED_ID = '__ungrouped';
 const MODAL_CLOSE_MS = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 160;
 
@@ -300,6 +300,53 @@ function buildGroupSection(group, drawers) {
     return section;
 }
 
+/**
+ * Decorative title row above the grouped list: a bold "分组列表" label on the
+ * left and one-click expand / collapse controls on the right.
+ */
+function buildGroupsHeader() {
+    const head = document.createElement('div');
+    head.className = 'emm-groups-head';
+
+    const title = document.createElement('span');
+    title.className = 'emm-groups-title';
+    title.textContent = '分组列表';
+
+    const actions = document.createElement('div');
+    actions.className = 'emm-groups-actions';
+
+    const expand = document.createElement('button');
+    expand.type = 'button';
+    expand.className = 'emm-groups-btn';
+    expand.title = '一键展开全部分组';
+    expand.setAttribute('aria-label', '一键展开全部分组');
+    expand.innerHTML = '<i class="fa-solid fa-angles-down" aria-hidden="true"></i>';
+    expand.addEventListener('click', () => setAllGroupsCollapsed(false));
+
+    const collapse = document.createElement('button');
+    collapse.type = 'button';
+    collapse.className = 'emm-groups-btn';
+    collapse.title = '一键折叠全部分组';
+    collapse.setAttribute('aria-label', '一键折叠全部分组');
+    collapse.innerHTML = '<i class="fa-solid fa-angles-up" aria-hidden="true"></i>';
+    collapse.addEventListener('click', () => setAllGroupsCollapsed(true));
+
+    actions.append(expand, collapse);
+    head.append(title, actions);
+    return head;
+}
+
+function setAllGroupsCollapsed(collapsed) {
+    const wrap = document.getElementById('emm-groups');
+    if (!wrap) return;
+    for (const group of settings.groups) group.collapsed = collapsed;
+    state.ungroupedCollapsed = collapsed;
+    saveSettings();
+    for (const section of wrap.querySelectorAll('.emm-group')) {
+        section.classList.toggle('emm-collapsed', collapsed);
+    }
+}
+
 function renderGrouped() {
     const wrap = ensureGroupHost();
     if (!wrap) return;
@@ -345,6 +392,7 @@ function renderGrouped() {
         if (!known.has(drawer)) orphans.push(drawer);
     }
     wrap.textContent = '';
+    wrap.append(buildGroupsHeader());
 
     for (const group of settings.groups) {
         const members = buckets.get(group.id);
@@ -917,6 +965,7 @@ async function requestDeleteGroup(group) {
     saveSettings();
     renderGroupEditor(true);
     applyGrouping(true);
+    showToast(`已删除分组「${group.name}」`);
 }
 
 function addGroup(rawName) {
