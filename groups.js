@@ -79,7 +79,10 @@ function buildGroupSection(group, drawers) {
     head.type = 'button';
     head.className = 'emm-group-head';
     head.innerHTML = `
-        <i class="fa-solid fa-chevron-down emm-group-caret" aria-hidden="true"></i>
+        <span class="emm-group-caret" aria-hidden="true">
+            <i class="fa-solid fa-chevron-down emm-caret-down"></i>
+            <i class="fa-solid fa-chevron-right emm-caret-right"></i>
+        </span>
         <span class="emm-group-name"></span>
         <span class="emm-group-count"></span>
         <span class="emm-group-spacer"></span>

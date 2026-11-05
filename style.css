@@ -650,6 +650,9 @@
     color: var(--SmartThemeQuoteColor, var(--SmartThemeBodyColor, #ddd));
 }
 
+/* Two glyphs instead of one rotated glyph: the down / right pair is already
+   optically centred, so no angle tuning is needed and the mark cannot end up a
+   fraction of a pixel off the row baseline. */
 .emm-group-caret {
     display: inline-flex;
     align-items: center;
@@ -660,11 +663,20 @@
     font-size: 0.75em;
     line-height: 1;
     opacity: 0.55;
-    transition: transform 0.15s ease;
 }
 
-.emm-collapsed .emm-group-caret {
-    transform: rotate(-90deg);
+.emm-group-caret i {
+    display: block;
+    line-height: 1;
+}
+
+.emm-group-caret .emm-caret-right,
+.emm-collapsed .emm-group-caret .emm-caret-down {
+    display: none;
+}
+
+.emm-collapsed .emm-group-caret .emm-caret-right {
+    display: block;
 }
 
 .emm-group-name {
@@ -706,8 +718,14 @@
     display: flex;
 }
 
-#emm-groups.emm-searching .emm-collapsed .emm-group-caret {
-    transform: none;
+/* A search force-opens every section, so the mark must show the open state
+   even though the collapsed class is still on the section. */
+#emm-groups.emm-searching .emm-collapsed .emm-group-caret .emm-caret-down {
+    display: block;
+}
+
+#emm-groups.emm-searching .emm-collapsed .emm-group-caret .emm-caret-right {
+    display: none;
 }
 
 .emm-group-col {
@@ -1107,13 +1125,19 @@ body.emm-modal-open {
 }
 
 .emm-mg-caret i {
+    display: block;
     font-size: 0.72em;
+    line-height: 1;
     opacity: 0.5;
-    transition: transform 0.16s ease;
 }
 
-.emm-mg-item.open .emm-mg-caret i {
-    transform: rotate(90deg);
+.emm-mg-caret .emm-caret-down,
+.emm-mg-item.open .emm-mg-caret .emm-caret-right {
+    display: none;
+}
+
+.emm-mg-item.open .emm-mg-caret .emm-caret-down {
+    display: block;
 }
 
 .emm-mg-caret:hover {

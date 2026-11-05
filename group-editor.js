@@ -35,7 +35,8 @@ function buildGroupManagerItem(group) {
     caret.className = 'emm-mg-caret';
     caret.title = '展开 / 收起插件列表';
     caret.setAttribute('aria-expanded', 'false');
-    caret.innerHTML = '<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>';
+    caret.innerHTML = '<i class="fa-solid fa-chevron-right emm-caret-right" aria-hidden="true"></i>'
+        + '<i class="fa-solid fa-chevron-down emm-caret-down" aria-hidden="true"></i>';
 
     const name = document.createElement('button');
     name.type = 'button';
