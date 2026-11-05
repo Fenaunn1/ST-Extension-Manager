@@ -26,7 +26,10 @@
        scrollbar or an extra hairline. */
     flex: 0 0 100%;
     width: 100%;
-    padding: 4px 0 8px;
+    /* Side padding keeps the bar's contents off the drawer edge when the
+       edge-to-edge paint is off; the paint itself is a shadow, so this does
+       not change the box width. */
+    padding: 4px 14px 8px;
     margin: 0 0 6px;
     background: none;
     color: var(--emm-text);
@@ -36,11 +39,12 @@
    background over the drawer's side padding without changing any box size,
    scroll width, or where the hairline ends. */
 #emm-sticky.emm-bar-full {
-    /* 16px is more than the drawer's side padding, and the drawer clips the
-       overflow, so the paint always stops exactly at the drawer's edge. */
+    /* Paint outwards by the sticky bar's own side padding plus a few spare
+       pixels, and let the drawer clip the rest: the surface reaches the
+       drawer edge without changing any box size. */
     box-shadow:
-        -16px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94))),
-        16px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94)));
+        -30px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94))),
+        30px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94)));
 }
 
 /* Surface layer. It matches the bar's own box exactly, so the hairline can
@@ -568,6 +572,9 @@
 }
 
 .emm-groups-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     flex: 1 1 auto;
     min-width: 0;
     font-size: calc(var(--mainFontSize) * 1);
@@ -577,6 +584,13 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Decorative only: the icon rides alongside the label, never pushes it. */
+.emm-groups-title-icon {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.86);
+    opacity: 0.62;
 }
 
 .emm-groups-actions {
@@ -902,12 +916,39 @@ body.emm-modal-open {
     font-size: calc(var(--mainFontSize) * 0.95);
 }
 
+/* Title with a leading glyph: icon, then label, both vertically centred. */
+.emm-modal-head .emm-head-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.emm-head-icon {
+    flex: 0 0 auto;
+    color: var(--emm-m-accent);
+    font-size: calc(var(--mainFontSize) * 0.9);
+}
+
+/* The close affordance is the only exit, so it gets a larger hit box than the
+   toolbar icons (.emm-icon-btn's 28px) even though it shares their look. */
 .emm-modal-close {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
     border: 0;
+    border-radius: 9px;
+    font-size: calc(var(--mainFontSize) * 1.16);
+    line-height: 1;
     color: inherit;
     background: transparent;
     cursor: pointer;
     transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.emm-modal-close i {
+    font-size: inherit;
+    pointer-events: none;
 }
 
 .emm-modal-close:hover {
@@ -1317,6 +1358,24 @@ body.emm-modal-open {
     gap: 6px;
 }
 
+/* Drag affordance for the bound list, parked at the far right of its header row
+   so the chips themselves stay free of repeated micro-copy. */
+.emm-bound-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    color: var(--emm-m-muted);
+    font-size: calc(var(--mainFontSize) * 0.68);
+    white-space: nowrap;
+    cursor: default;
+}
+
+.emm-bound-hint i {
+    font-size: 0.9em;
+    opacity: 0.75;
+}
+
 .emm-bound-list {
     display: flex;
     flex-wrap: wrap;
@@ -1414,6 +1473,7 @@ body.emm-modal-open {
     color: var(--emm-m-muted);
     font-size: calc(var(--mainFontSize) * 0.7);
 }
+
 
 .emm-picker-tabs {
     display: flex;
@@ -1551,6 +1611,10 @@ body.emm-modal-open {
 }
 
 .emm-modal-foot .menu_button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     min-width: 76px;
     height: 32px;
     min-height: 32px;
@@ -1558,6 +1622,14 @@ body.emm-modal-open {
     padding: 0 12px;
     border-radius: 8px;
     white-space: nowrap;
+}
+
+/* Leading glyphs on the footer actions are nudges, not signals: keep them muted
+   so the label still reads first. */
+.emm-modal-foot .menu_button > i:first-child {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.84);
+    opacity: 0.72;
 }
 
 /* Backup actions sit opposite the destructive ones, out of the way. */

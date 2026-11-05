@@ -266,7 +266,6 @@ function renderBoundList(keys, host) {
         const title = keyTitle(key);
         const chip = document.createElement('span');
         chip.className = 'emm-bound-chip';
-        chip.title = `${title}（拖动可调整顺序）`;
         chip.draggable = true;
         chip.dataset.key = key;
 
@@ -615,50 +614,73 @@ async function requestDeleteGroup(group) {
     });
 }
 
-/** Plain-text clipboard write with a fallback for non-secure contexts. */
-async function writeClipboard(text) {
-    try {
-        await navigator.clipboard.writeText(text);
-        return true;
-    } catch {
-        const node = document.createElement('textarea');
-        node.value = text;
-        node.setAttribute('readonly', '');
-        node.style.position = 'fixed';
-        node.style.opacity = '0';
-        document.body.appendChild(node);
-        node.select();
-        let ok = false;
-        try {
-            ok = document.execCommand('copy');
-        } catch {
-            ok = false;
-        }
-        node.remove();
-        return ok;
-    }
-}
-
-async function readClipboard() {
-    try {
-        return await navigator.clipboard.readText();
-    } catch {
-        return '';
-    }
-}
-
-async function copyGroupsConfig() {
+/** Serialize the current grouping into the on-disk JSON shape. */
+function buildGroupsConfig() {
     normalizeGroups();
-    const payload = {
+    return {
         app: 'extension-manager',
         version: VERSION,
         groups: settings.groups,
         ungroupedCollapsed: !!settings.ungroupedCollapsed,
     };
-    const ok = await writeClipboard(JSON.stringify(payload, null, 2));
-    showToast(ok
-        ? `已复制 ${settings.groups.length} 个分组的配置`
-        : '复制失败，浏览器拒绝了剪贴板访问');
+}
+
+/** Download the grouping as a JSON file the user can keep or move around. */
+function exportGroupsConfig() {
+    const payload = buildGroupsConfig();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'extension-manager-groups.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Revoke on the next tick so the browser has already started the download.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast(`已导出 ${settings.groups.length} 个分组的配置`);
+}
+
+/** Open the file picker; the chosen JSON is validated and confirmed. */
+function importGroupsConfig() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.style.display = 'none';
+    input.addEventListener('change', async () => {
+        const file = input.files && input.files[0];
+        input.remove();
+        if (!file) return;
+        let text = '';
+        try {
+            text = await file.text();
+        } catch {
+            showToast('读取文件失败');
+            return;
+        }
+        const parsed = parseGroupsConfig(text);
+        if (!parsed) {
+            showToast('文件不是有效的分组配置');
+            return;
+        }
+        const ok = await askConfirm({
+            title: '导入分组配置',
+            message: `将用 ${parsed.groups.length} 个分组替换当前的 ${settings.groups.length} 个分组，确定导入吗？`,
+            confirmText: '导入',
+            danger: true,
+        });
+        if (!ok) return;
+        settings.groups = parsed.groups;
+        settings.ungroupedCollapsed = parsed.ungroupedCollapsed;
+        state.expandedGroups.clear();
+        normalizeGroups();
+        saveSettings();
+        renderGroupEditor(true);
+        applyGrouping(true);
+        showToast(`已导入 ${settings.groups.length} 个分组`);
+    }, { once: true });
+    document.body.appendChild(input);
+    input.click();
 }
 
 /** Validate an imported payload; returns null when it is not usable. */
@@ -682,35 +704,6 @@ function parseGroupsConfig(text) {
         }))
         .filter(group => group.name);
     return groups.length ? { groups, ungroupedCollapsed: !!data?.ungroupedCollapsed } : null;
-}
-
-async function importGroupsConfig() {
-    const text = await readClipboard();
-    if (!normalize(text)) {
-        showToast('剪贴板是空的，先复制一份分组配置');
-        return;
-    }
-    const parsed = parseGroupsConfig(text);
-    if (!parsed) {
-        showToast('剪贴板内容不是有效的分组配置');
-        return;
-    }
-    const ok = await askConfirm({
-        title: '导入分组配置',
-        message: `将用 ${parsed.groups.length} 个分组替换当前的 ${settings.groups.length} 个分组，确定导入吗？`,
-        confirmText: '导入',
-        danger: true,
-    });
-    if (!ok) return;
-
-    settings.groups = parsed.groups;
-    settings.ungroupedCollapsed = parsed.ungroupedCollapsed;
-    state.expandedGroups.clear();
-    normalizeGroups();
-    saveSettings();
-    renderGroupEditor(true);
-    applyGrouping(true);
-    showToast(`已导入 ${settings.groups.length} 个分组`);
 }
 
 function addGroup(rawName) {
@@ -776,17 +769,17 @@ export {
     bindGroupRowDrag,
     bindKeyToGroup,
     buildGroupManagerItem,
+    buildGroupsConfig,
     clearAddGroupError,
     clearEditNameError,
     closeGroupEditModal,
-    copyGroupsConfig,
     currentEditGroup,
+    exportGroupsConfig,
     importGroupsConfig,
     isGroupEditDirty,
     moveGroup,
     openGroupEditor,
     parseGroupsConfig,
-    readClipboard,
     renderBoundList,
     renderGroupEditModal,
     renderGroupEditor,
@@ -800,5 +793,4 @@ export {
     showAddGroupError,
     showEditNameError,
     unbindKeyFromGroup,
-    writeClipboard,
 };

@@ -6,7 +6,7 @@
  */
 
 import { MODAL_CLOSE_MS, normalize, state } from './core.js';
-import { addGroup, clearAddGroupError, clearEditNameError, closeGroupEditModal, copyGroupsConfig, importGroupsConfig, openGroupEditor, renderGroupEditor, renderGroupPicker, requestCloseGroupEditor, saveGroupEditor, showAddGroupError } from './group-editor.js';
+import { addGroup, clearAddGroupError, clearEditNameError, closeGroupEditModal, exportGroupsConfig, importGroupsConfig, openGroupEditor, renderGroupEditor, renderGroupPicker, requestCloseGroupEditor, saveGroupEditor, showAddGroupError } from './group-editor.js';
 import { groupNameExists, normalizeGroups } from './groups.js';
 
 function syncModalLock() {
@@ -146,9 +146,12 @@ function buildGroupModal() {
             <div class="emm-modal-backdrop" data-action="close"></div>
             <div class="emm-modal-card emm-groups-card" role="dialog" aria-modal="true" aria-label="管理分组">
                 <div class="emm-modal-head">
-                    <b>管理分组</b>
-                    <button type="button" class="emm-icon-btn emm-modal-close" data-action="close" title="关闭">
-                        <i class="fa-solid fa-xmark"></i>
+                    <b class="emm-head-title">
+                        <i class="fa-solid fa-pen-to-square emm-head-icon" aria-hidden="true"></i>
+                        <span>管理分组</span>
+                    </b>
+                    <button type="button" class="emm-icon-btn emm-modal-close" data-action="close" title="关闭" aria-label="关闭">
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                     </button>
                 </div>
                 <div class="emm-modal-body">
@@ -161,8 +164,12 @@ function buildGroupModal() {
                     <div id="emm-group-rows"></div>
                 </div>
                 <div class="emm-modal-foot emm-groups-foot">
-                    <button type="button" class="menu_button" data-action="copy-groups">复制配置</button>
-                    <button type="button" class="menu_button" data-action="import-groups">从剪贴板导入</button>
+                    <button type="button" class="menu_button" data-action="import-groups" title="从 JSON 文件导入分组配置">
+                        <i class="fa-solid fa-file-import" aria-hidden="true"></i><span>导入</span>
+                    </button>
+                    <button type="button" class="menu_button" data-action="export-groups" title="将分组配置导出为 JSON 文件">
+                        <i class="fa-solid fa-file-export" aria-hidden="true"></i><span>导出</span>
+                    </button>
                 </div>
             </div>
         `;
@@ -171,7 +178,7 @@ function buildGroupModal() {
         modal.addEventListener('click', event => {
             const action = event.target.closest('[data-action]')?.dataset.action;
             if (action === 'close') closeGroupModal();
-            else if (action === 'copy-groups') copyGroupsConfig();
+            else if (action === 'export-groups') exportGroupsConfig();
             else if (action === 'import-groups') importGroupsConfig();
         });
 
@@ -262,9 +269,12 @@ function buildGroupEditModal() {
         <div class="emm-modal-backdrop" data-action="close-edit"></div>
         <div class="emm-modal-card emm-edit-card" role="dialog" aria-modal="true" aria-labelledby="emm-edit-heading">
             <div class="emm-modal-head">
-                <b id="emm-edit-heading">编辑分组</b>
-                <button type="button" class="emm-icon-btn emm-modal-close" data-action="close-edit" title="关闭">
-                    <i class="fa-solid fa-xmark"></i>
+                <b class="emm-head-title" id="emm-edit-heading">
+                    <i class="fa-solid fa-object-group emm-head-icon" aria-hidden="true"></i>
+                    <span>编辑分组</span>
+                </b>
+                <button type="button" class="emm-icon-btn emm-modal-close" data-action="close-edit" title="关闭" aria-label="关闭">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                 </button>
             </div>
             <div class="emm-modal-body">
@@ -278,6 +288,9 @@ function buildGroupEditModal() {
                     <div class="emm-bound-head">
                         <span class="emm-field-label">本组插件</span>
                         <span class="emm-pill" data-count="bound">0</span>
+                        <span class="emm-bound-hint" title="按住标签拖动可调整组内顺序">
+                            <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i><span>拖动排序</span>
+                        </span>
                     </div>
                     <div id="emm-bound-list" class="emm-bound-list"></div>
                 </div>
@@ -301,8 +314,12 @@ function buildGroupEditModal() {
                 </div>
             </div>
             <div class="emm-modal-foot">
-                <button type="button" class="menu_button" data-action="close-edit">取消</button>
-                <button type="button" class="menu_button emm-btn-primary" id="emm-edit-save">保存</button>
+                <button type="button" class="menu_button" data-action="close-edit">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i><span>取消</span>
+                </button>
+                <button type="button" class="menu_button emm-btn-primary" id="emm-edit-save">
+                    <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i><span>保存</span>
+                </button>
             </div>
         </div>
     `;

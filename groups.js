@@ -124,7 +124,12 @@ function buildGroupsHeader() {
 
     const title = document.createElement('span');
     title.className = 'emm-groups-title';
-    title.textContent = '分组列表';
+    const titleIcon = document.createElement('i');
+    titleIcon.className = 'fa-solid fa-layer-group emm-groups-title-icon';
+    titleIcon.setAttribute('aria-hidden', 'true');
+    const titleText = document.createElement('span');
+    titleText.textContent = '分组列表';
+    title.append(titleIcon, titleText);
 
     const actions = document.createElement('div');
     actions.className = 'emm-groups-actions';
