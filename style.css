@@ -314,13 +314,15 @@
 }
 
 #emm-sticky .emm-icon-btn,
-#emm-sticky .emm-kebab {
+#emm-sticky .emm-kebab,
+#emm-sticky .emm-groups-btn {
     color: var(--emm-text);
     background: var(--emm-button-bg);
 }
 
 #emm-sticky .emm-icon-btn:hover,
-#emm-sticky .emm-kebab:hover {
+#emm-sticky .emm-kebab:hover,
+#emm-sticky .emm-groups-btn:hover {
     background: var(--emm-tab-hover);
 }
 
@@ -553,11 +555,11 @@
     gap: 8px;
     flex: 0 0 auto;
     width: 100%;
-    height: 26px;
-    min-height: 26px;
-    max-height: 26px;
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
     box-sizing: border-box;
-    padding: 0 2px;
+    padding: 0;
     overflow: hidden;
 }
 
@@ -570,7 +572,7 @@
     min-width: 0;
     font-size: calc(var(--mainFontSize) * 1);
     font-weight: 700;
-    line-height: 26px;
+    line-height: 28px;
     color: var(--emm-text, var(--SmartThemeBodyColor, #ddd));
     white-space: nowrap;
     overflow: hidden;
@@ -580,33 +582,22 @@
 .emm-groups-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex: 0 0 auto;
 }
 
+/* Same box, radius, border and font as the toolbar icons above: these carry the
+   identical .menu_button base class, so anything set here would drift from them. */
 .emm-groups-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
-    line-height: 1;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
     padding: 0;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    background: var(--emm-button-bg);
-    color: var(--emm-text, var(--SmartThemeBodyColor, #ddd));
-    font-size: 0.74em;
-    opacity: 1;
-    cursor: pointer;
-    transition: opacity 0.12s ease, background 0.12s ease, border-color 0.12s ease;
-}
-
-.emm-groups-btn:hover {
-    opacity: 1;
-    border-color: var(--emm-border);
-    background: var(--emm-tab-hover);
+    margin: 0;
 }
 
 .emm-groups-btn:focus-visible {
