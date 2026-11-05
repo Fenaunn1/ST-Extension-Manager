@@ -203,7 +203,7 @@
     padding: 4px 2px;
     border: 0;
     background: transparent;
-    color: var(--emm-text, var(--SmartThemeBodyColor, #ddd));
+    color: var(--SmartThemeBodyColor, #ddd);
     font-family: inherit;
     font-size: calc(var(--mainFontSize) * 0.95);
     font-weight: 700;
@@ -212,7 +212,7 @@
 }
 
 .emm-group-head:hover {
-    color: var(--emm-accent, var(--SmartThemeQuoteColor, var(--SmartThemeBodyColor, #ddd)));
+    color: var(--SmartThemeQuoteColor, var(--SmartThemeBodyColor, #ddd));
 }
 
 /* Two glyphs instead of one rotated glyph: the down / right pair is already
@@ -257,7 +257,7 @@
     margin-left: 6px;
     padding: 1px 7px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--emm-text, var(--SmartThemeBodyColor, #ddd)) 10%, transparent);
+    background: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 10%, transparent);
     font-size: 0.75em;
     font-variant-numeric: tabular-nums;
     opacity: 0.8;

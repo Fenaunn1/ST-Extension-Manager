@@ -69,14 +69,10 @@ function updateLayout() {
 function applyThemeMode() {
     if (!ui.sticky) return;
     const mode = normalizeTheme(settings.theme);
-    // The drawer root carries the same class too: group rows are not inside the
-    // sticky bar, so the fixed palette has to reach them from above. Modals and
-    // toasts live on <body> and are matched from that class via :has().
-    const targets = [ui.sticky, document.getElementById('rm_extensions_block')].filter(Boolean);
-    for (const target of targets) {
-        target.classList.remove('emm-theme-auto', 'emm-theme-day', 'emm-theme-night');
-        target.classList.add(`emm-theme-${mode}`);
-    }
+    // Only the bar is themed. Group rows, modals and toasts keep the SillyTavern
+    // theme on purpose, so the bar stays the single place this setting touches.
+    ui.sticky.classList.remove('emm-theme-auto', 'emm-theme-day', 'emm-theme-night');
+    ui.sticky.classList.add(`emm-theme-${mode}`);
     applyStickyBackground();
 }
 
