@@ -254,6 +254,7 @@ function currentEditGroup() {
 
 function renderBoundList(keys, host) {
     host.textContent = '';
+    host.classList.toggle('is-empty', !keys.length);
     if (!keys.length) {
         const empty = document.createElement('span');
         empty.className = 'emm-bound-empty';
@@ -262,16 +263,26 @@ function renderBoundList(keys, host) {
         return;
     }
 
-    for (const key of keys) {
+    keys.forEach((key, index) => {
         const title = keyTitle(key);
-        const chip = document.createElement('span');
-        chip.className = 'emm-bound-chip';
-        chip.draggable = true;
-        chip.dataset.key = key;
+        const row = document.createElement('div');
+        row.className = 'emm-bound-row';
+        row.draggable = true;
+        row.dataset.key = key;
+        row.setAttribute('role', 'listitem');
+
+        const grip = document.createElement('i');
+        grip.className = 'fa-solid fa-grip-vertical emm-bound-grip';
+        grip.setAttribute('aria-hidden', 'true');
+
+        const order = document.createElement('span');
+        order.className = 'emm-bound-index';
+        order.textContent = String(index + 1);
 
         const name = document.createElement('span');
         name.className = 'emm-bound-name';
         name.textContent = title;
+        name.title = title;
 
         const remove = document.createElement('button');
         remove.type = 'button';
@@ -281,49 +292,74 @@ function renderBoundList(keys, host) {
         remove.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
         remove.addEventListener('click', () => unbindKeyFromGroup(key));
 
-        chip.append(name, remove);
-        host.append(chip);
-    }
+        row.append(grip, order, name, remove);
+        row.tabIndex = 0;
+        row.setAttribute('aria-label', `第 ${index + 1} 个，${title}，按 Alt 加上下方向键调整顺序`);
+        row.addEventListener('keydown', event => {
+            if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+            event.preventDefault();
+            moveBoundKeyByStep(key, event.key === 'ArrowUp' ? -1 : 1);
+        });
+        host.append(row);
+    });
     bindChipDrag(host);
 }
 
-/** Reorder bound members within the edited group by dragging their chips. */
+/**
+ * Keyboard counterpart to dragging: shifts one member by one slot and puts the
+ * focus back on the moved row so repeated presses keep working.
+ */
+function moveBoundKeyByStep(key, step) {
+    const edit = state.edit;
+    const group = currentEditGroup();
+    if (!edit || !group) return;
+    const bound = [...edit.assign.entries()]
+        .filter(([, ownerId]) => ownerId === group.id)
+        .map(([boundKey]) => boundKey);
+    const from = bound.indexOf(key);
+    const to = from + step;
+    if (from === -1 || to < 0 || to >= bound.length) return;
+    reorderBoundKey(key, bound[to], step > 0);
+    document.querySelector(`.emm-bound-row[data-key="${CSS.escape(key)}"]`)?.focus();
+}
+
+/** Reorder bound members by dragging a row up or down the list. */
 function bindChipDrag(host) {
     let draggedKey = null;
     const clearMarks = () => {
-        host.querySelectorAll('.emm-bound-chip').forEach(chip => {
-            chip.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after');
+        host.querySelectorAll('.emm-bound-row').forEach(row => {
+            row.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after');
         });
     };
 
-    host.querySelectorAll('.emm-bound-chip').forEach(chip => {
-        chip.addEventListener('dragstart', event => {
-            draggedKey = chip.dataset.key;
-            chip.classList.add('is-dragging');
+    host.querySelectorAll('.emm-bound-row').forEach(row => {
+        row.addEventListener('dragstart', event => {
+            draggedKey = row.dataset.key;
+            row.classList.add('is-dragging');
             event.dataTransfer?.setData('text/plain', draggedKey ?? '');
             if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
         });
-        chip.addEventListener('dragend', () => {
+        row.addEventListener('dragend', () => {
             draggedKey = null;
             clearMarks();
         });
-        chip.addEventListener('dragover', event => {
-            if (!draggedKey || draggedKey === chip.dataset.key) return;
+        row.addEventListener('dragover', event => {
+            if (!draggedKey || draggedKey === row.dataset.key) return;
             event.preventDefault();
-            const rect = chip.getBoundingClientRect();
-            const after = event.clientX > rect.left + rect.width / 2;
-            chip.classList.toggle('is-drop-before', !after);
-            chip.classList.toggle('is-drop-after', after);
+            const rect = row.getBoundingClientRect();
+            const after = event.clientY > rect.top + rect.height / 2;
+            row.classList.toggle('is-drop-before', !after);
+            row.classList.toggle('is-drop-after', after);
         });
-        chip.addEventListener('dragleave', () => {
-            chip.classList.remove('is-drop-before', 'is-drop-after');
+        row.addEventListener('dragleave', () => {
+            row.classList.remove('is-drop-before', 'is-drop-after');
         });
-        chip.addEventListener('drop', event => {
-            if (!draggedKey || draggedKey === chip.dataset.key) return;
+        row.addEventListener('drop', event => {
+            if (!draggedKey || draggedKey === row.dataset.key) return;
             event.preventDefault();
-            const rect = chip.getBoundingClientRect();
-            const after = event.clientX > rect.left + rect.width / 2;
-            reorderBoundKey(draggedKey, chip.dataset.key, after);
+            const rect = row.getBoundingClientRect();
+            const after = event.clientY > rect.top + rect.height / 2;
+            reorderBoundKey(draggedKey, row.dataset.key, after);
             draggedKey = null;
             clearMarks();
         });

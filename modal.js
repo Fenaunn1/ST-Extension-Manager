@@ -288,16 +288,15 @@ function buildGroupEditModal() {
                     <div class="emm-bound-head">
                         <span class="emm-field-label">本组插件</span>
                         <span class="emm-pill" data-count="bound">0</span>
-                        <span class="emm-bound-hint" title="按住标签拖动可调整组内顺序">
-                            <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i><span>拖动排序</span>
-                        </span>
+                        <span class="emm-bound-hint">按住行上下拖动排序，此顺序即抽屉里的显示顺序</span>
                     </div>
-                    <div id="emm-bound-list" class="emm-bound-list"></div>
+                    <div id="emm-bound-list" class="emm-bound-list" role="list"
+                         aria-label="本组插件，按显示顺序排列"></div>
                 </div>
                 <div class="emm-picker">
                     <div class="emm-picker-head">
                         <span class="emm-field-label">添加插件</span>
-                        <span class="emm-picker-hint">点 + 绑定到本分组；标签上的 × 可移出</span>
+                        <span class="emm-picker-hint">点 + 绑定到本分组；列表行尾的 × 可移出</span>
                     </div>
                     <div class="emm-picker-tabs" role="tablist" aria-label="插件来源">
                         <button type="button" class="emm-picker-tab is-active" data-tab="ungrouped" role="tab"
