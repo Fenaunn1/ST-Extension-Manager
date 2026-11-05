@@ -14,7 +14,7 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.3.5';
+const VERSION = '1.3.6';
 const UNGROUPED_ID = '__ungrouped';
 const MODAL_CLOSE_MS = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 160;
 
@@ -25,6 +25,7 @@ const DEFAULTS = {
     theme: 'auto', // auto | day | night
     tabLabelMax: 5, // characters shown in a tab before the name is clipped
     tabLabelClip: true, // clip long tab names; off shows the full title
+    barFullBleed: false, // paint the sticky bar edge-to-edge across the drawer
     grouping: false, // show custom groups instead of a flat list
     groups: [], // [{ id, name, enabled, collapsed, members: [title] }]
 };
@@ -1205,6 +1206,12 @@ function appendSettingsDrawer() {
                 <i class="fa-solid fa-ellipsis emm-opt-icon" aria-hidden="true"></i>
                 <span>收纳顶部按钮</span>
             </label>
+            <label class="checkbox_label" for="emm-opt-bleed" title="让顶栏背景铺满抽屉左右两侧">
+                <input id="emm-opt-bleed" type="checkbox">
+                <i class="fa-solid fa-arrows-left-right emm-opt-icon" aria-hidden="true"></i>
+                <span>顶栏铺满两侧</span>
+            </label>
+            <p class="emm-opt-desc">开启后顶栏背景一直延伸到抽屉左右边缘；关闭则留出两侧间距。</p>
             <label class="checkbox_label" for="emm-opt-hidebuiltins">
                 <input id="emm-opt-hidebuiltins" type="checkbox">
                 <i class="fa-solid fa-eye-slash emm-opt-icon" aria-hidden="true"></i>
@@ -1238,6 +1245,7 @@ function appendSettingsDrawer() {
         ['emm-opt-compact', 'compactActions'],
         ['emm-opt-search', 'showSearch'],
         ['emm-opt-hidebuiltins', 'hideBuiltins'],
+        ['emm-opt-bleed', 'barFullBleed'],
     ];
     for (const [id, key] of options) {
         const input = /** @type {HTMLInputElement} */ (document.getElementById(id));
@@ -1663,6 +1671,8 @@ function updateLayout() {
         if (!settings.compactActions && ui.dropdown) ui.dropdown.hidden = true;
     }
 
+    if (ui.sticky) ui.sticky.classList.toggle('emm-bar-full', !!settings.barFullBleed);
+
     applyThemeMode();
     applyBuiltinVisibility();
 
@@ -1670,6 +1680,7 @@ function updateLayout() {
         ['emm-opt-compact', 'compactActions'],
         ['emm-opt-search', 'showSearch'],
         ['emm-opt-hidebuiltins', 'hideBuiltins'],
+        ['emm-opt-bleed', 'barFullBleed'],
     ]) {
         const input = /** @type {HTMLInputElement} */ (document.getElementById(id));
         if (input) input.checked = !!settings[key];

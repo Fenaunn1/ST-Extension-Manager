@@ -16,19 +16,44 @@
     position: sticky;
     top: 0;
     z-index: 30;
-    flex: 0 0 calc(100% + 20px);
-    width: calc(100% + 20px);
     display: flex;
     flex-direction: column;
     gap: 6px;
     box-sizing: border-box;
-    /* Bleed over the drawer's 10px side padding so the toolbar lines up with
-       SillyTavern's own top bar; the padding below restores the visual gutter. */
-    padding: 4px 8px 8px;
-    margin: 0 -10px 6px;
+    /* The box never grows past the drawer's content column: the surface is
+       painted by ::before, and the optional edge-to-edge version adds paint
+       only (box-shadow), so no theme can be pushed into a horizontal
+       scrollbar or an extra hairline. */
+    flex: 0 0 100%;
+    width: 100%;
+    padding: 4px 0 8px;
+    margin: 0 0 6px;
+    background: none;
+    color: var(--emm-text);
+}
+
+/* Optional edge-to-edge surface: a shadow is pure paint, so it stretches the
+   background over the drawer's side padding without changing any box size,
+   scroll width, or where the hairline ends. */
+#emm-sticky.emm-bar-full {
+    /* 16px is more than the drawer's side padding, and the drawer clips the
+       overflow, so the paint always stops exactly at the drawer's edge. */
+    box-shadow:
+        -16px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94))),
+        16px 0 0 0 var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94)));
+}
+
+/* Surface layer. It matches the bar's own box exactly, so the hairline can
+   never stick out past the painted background (that stray line is what made
+   some themes look like they grew an underline). */
+#emm-sticky::before {
+    content: '';
+    position: absolute;
+    inset: 0;
     background-color: var(--emm-surface, var(--SmartThemeBlurTintColor, rgba(20, 20, 24, 0.94)));
     border-bottom: 1px solid var(--emm-border);
-    color: var(--emm-text);
+    pointer-events: none;
+    z-index: -1;
 }
 
 /* Fixed palettes are intentionally independent from the SillyTavern theme. */
@@ -565,26 +590,27 @@
     justify-content: center;
     width: 24px;
     height: 24px;
+    min-width: 24px;
     line-height: 1;
     padding: 0;
     border: 1px solid transparent;
     border-radius: 6px;
-    background: transparent;
-    color: var(--SmartThemeBodyColor, #ddd);
+    background: var(--emm-button-bg);
+    color: var(--emm-text, var(--SmartThemeBodyColor, #ddd));
     font-size: 0.74em;
-    opacity: 0.6;
+    opacity: 1;
     cursor: pointer;
     transition: opacity 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }
 
 .emm-groups-btn:hover {
     opacity: 1;
-    border-color: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 20%, transparent);
-    background: color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 10%, transparent);
+    border-color: var(--emm-border);
+    background: var(--emm-tab-hover);
 }
 
 .emm-groups-btn:focus-visible {
-    outline: 2px solid var(--SmartThemeQuoteColor, #a78bfa);
+    outline: 2px solid var(--emm-accent, var(--SmartThemeQuoteColor, #a78bfa));
     outline-offset: 1px;
 }
 
