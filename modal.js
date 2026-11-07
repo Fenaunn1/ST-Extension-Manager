@@ -17,10 +17,10 @@ function syncModalLock() {
 }
 
 /**
- * Animate modal layers out before applying [hidden] so closing feels
- * deliberate. Reopening cancels a pending close.
+ * Show a layer, cancelling any fade-out still in flight. Kept separate from
+ * openModalLayer() because the confirm dialog must not touch the focus stack.
  */
-function openModalLayer(layer) {
+function revealLayer(layer) {
     if (!layer) return;
     if (layer.__emmCloseTimer) {
         clearTimeout(layer.__emmCloseTimer);
@@ -29,12 +29,14 @@ function openModalLayer(layer) {
     layer.__emmCloseCallbacks = [];
     layer.classList.remove('emm-closing');
     layer.hidden = false;
-    // Remember what had focus so closing returns the user where they were.
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && !layer.contains(active)) state.focusStack.push(active);
 }
 
-function closeModalLayer(layer, done) {
+/**
+ * Fade a layer out before applying [hidden] so closing feels deliberate. The
+ * whole layer fades as one surface (see css/modal.css) instead of the scrim and
+ * the card running separate animations, which produced a visible flash.
+ */
+function fadeLayerOut(layer, done) {
     if (!layer) {
         done?.();
         return;
@@ -57,8 +59,22 @@ function closeModalLayer(layer, done) {
         const callbacks = layer.__emmCloseCallbacks ?? [];
         layer.__emmCloseCallbacks = [];
         for (const callback of callbacks) callback();
-        restoreModalFocus();
     }, MODAL_CLOSE_MS);
+}
+
+function openModalLayer(layer) {
+    if (!layer) return;
+    revealLayer(layer);
+    // Remember what had focus so closing returns the user where they were.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && !layer.contains(active)) state.focusStack.push(active);
+}
+
+function closeModalLayer(layer, done) {
+    fadeLayerOut(layer, () => {
+        done?.();
+        restoreModalFocus();
+    });
 }
 
 /** Focus the element that had it before the top-most layer opened. */
@@ -476,7 +492,7 @@ function askConfirm({ title, message, confirmText = '确定', danger = false, pr
             ok.classList.toggle('emm-btn-danger', danger);
             ok.classList.toggle('emm-btn-primary', primary && !danger);
         }
-        layer.hidden = false;
+        revealLayer(layer);
         setTimeout(() => layer.querySelector('[data-action="cancel"]')?.focus(), 0);
     });
 }
@@ -484,8 +500,9 @@ function askConfirm({ title, message, confirmText = '确定', danger = false, pr
 function finishConfirm(value) {
     const pending = state.confirm;
     state.confirm = null;
-    const layer = document.getElementById('emm-confirm');
-    if (layer) layer.hidden = true;
+    // Resolve right away, fade the layer out behind the caller's work: hiding
+    // it instantly was the other half of the close flash.
+    fadeLayerOut(document.getElementById('emm-confirm'));
     pending?.resolve?.(value);
 }
 

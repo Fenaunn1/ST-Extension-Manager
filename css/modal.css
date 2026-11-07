@@ -44,6 +44,24 @@ body.emm-modal-open {
     background: rgba(0, 0, 0, 0.55);
 }
 
+/* One transition on the layer itself instead of separate backdrop and card
+   animations. Both children used to fade on their own schedule, so the scrim
+   thinned out a few frames before the card finished leaving and the page showed
+   through mid-animation — the "flash" seen when closing the group dialogs.
+   Fading the whole layer keeps scrim and card at the same opacity on every
+   frame. Durations here must stay in sync with MODAL_CLOSE_MS in core.js. */
+.emm-modal,
+.emm-confirm {
+    opacity: 1;
+    transition: opacity 0.16s ease-out;
+}
+
+.emm-modal.emm-closing,
+.emm-confirm.emm-closing {
+    opacity: 0;
+    pointer-events: none;
+}
+
 @keyframes emm-modal-in {
     from {
         opacity: 0;
@@ -55,54 +73,23 @@ body.emm-modal-open {
     }
 }
 
-@keyframes emm-modal-out {
-    from {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-    to {
-        opacity: 0;
-        transform: translateY(6px) scale(0.985);
-    }
-}
-
-@keyframes emm-fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes emm-fade-out {
-    from { opacity: 1; }
-    to { opacity: 0; }
-}
-
-.emm-modal:not([hidden]) .emm-modal-backdrop,
-.emm-confirm:not([hidden]) .emm-confirm-backdrop {
-    animation: emm-fade-in 0.16s ease-out;
-}
-
 .emm-modal:not([hidden]) .emm-modal-card,
 .emm-confirm:not([hidden]) .emm-confirm-card {
     animation: emm-modal-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.emm-modal.emm-closing {
-    pointer-events: none;
-}
-
-.emm-modal.emm-closing .emm-modal-backdrop {
-    animation: emm-fade-out 0.15s ease-in forwards;
-}
-
-.emm-modal.emm-closing .emm-modal-card {
-    animation: emm-modal-out 0.15s ease-in forwards;
-}
-
+/* Reduced motion keeps a short opacity fade. Dropping the transition entirely
+   would snap the whole layer away in one frame, which reads as a flash —
+   worse than the animation it is meant to remove. The card's slide-in is
+   dropped; the layer fade still covers both directions. */
 @media (prefers-reduced-motion: reduce) {
-    .emm-modal .emm-modal-backdrop,
-    .emm-modal .emm-modal-card,
-    .emm-confirm .emm-confirm-backdrop,
-    .emm-confirm .emm-confirm-card {
+    .emm-modal,
+    .emm-confirm {
+        transition-duration: 0.1s;
+    }
+
+    .emm-modal:not([hidden]) .emm-modal-card,
+    .emm-confirm:not([hidden]) .emm-confirm-card {
         animation: none !important;
     }
 }

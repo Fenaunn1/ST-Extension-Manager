@@ -88,7 +88,6 @@ function buildGroupSection(group, drawers) {
         <span class="emm-group-spacer"></span>
     `;
     head.querySelector('.emm-group-name').textContent = group.name;
-    head.querySelector('.emm-group-count').textContent = String(drawers.length);
     head.setAttribute('aria-expanded', String(!group.collapsed));
     head.addEventListener('click', () => {
         const collapsed = section.classList.toggle('emm-collapsed');
@@ -110,6 +109,10 @@ function buildGroupSection(group, drawers) {
         column.append(...slice);
         body.append(column);
     }
+    // A unit can carry more than one drawer, so the badge counts drawers rather
+    // than the units that will be moved.
+    head.querySelector('.emm-group-count').textContent =
+        String(body.querySelectorAll('.inline-drawer').length);
 
     if (group.collapsed) section.classList.add('emm-collapsed');
     section.append(head, body);
@@ -200,6 +203,46 @@ function setAllGroupsCollapsed(collapsed) {
     }
 }
 
+/**
+ * The element that must travel with a drawer. SillyTavern wraps most extension
+ * drawers in a container that carries the selectors their own stylesheets rely
+ * on (the regex panel hides its bulk-edit checkbox through
+ * `.regex_settings .regex_bulk_checkbox`). Moving the bare drawer out of that
+ * wrapper makes those rules miss, so the whole unit moves together.
+ */
+function drawerUnit(drawer) {
+    let node = drawer;
+    let parent = node.parentElement;
+    while (parent && parent !== document.body) {
+        if (parent.id === 'extensions_settings' || parent.id === 'extensions_settings2'
+            || parent.id === 'emm-groups') {
+            return node;
+        }
+        node = parent;
+        parent = node.parentElement;
+    }
+    return drawer;
+}
+
+/** Unit that already owns a drawer, according to the recorded origins. */
+function trackedUnit(drawer) {
+    for (const unit of state.origin.keys()) {
+        if (unit === drawer || unit.contains(drawer)) return unit;
+    }
+    return null;
+}
+
+/** Top-most element a stray drawer occupies inside the grouped list. */
+function placementUnit(drawer, wrap) {
+    let node = drawer;
+    while (node.parentElement && node.parentElement !== wrap
+        && !node.parentElement.matches('.emm-group-col, .emm-group-body, #emm-groups-hidden, #emm-groups-orphans')) {
+        node = node.parentElement;
+    }
+    if (node === wrap || !wrap.contains(node)) return null;
+    return node;
+}
+
 function renderGrouped() {
     const wrap = ensureGroupHost();
     if (!wrap) return;
@@ -208,13 +251,36 @@ function renderGrouped() {
     const keys = new Map(all.map(drawer => [drawer, drawerKey(drawer)]));
     if (!state.baseOrder) state.baseOrder = new Map();
     let seq = state.baseOrder.size;
+    const units = new Map();
     for (const drawer of all) {
         if (!state.baseOrder.has(drawer)) state.baseOrder.set(drawer, seq++);
-        if (!state.origin.has(drawer)) {
-            state.origin.set(drawer, { parent: drawer.parentElement, next: drawer.nextElementSibling });
+        let unit = trackedUnit(drawer);
+        if (!unit) {
+            unit = drawer.closest('#emm-groups') ? drawer : drawerUnit(drawer);
+            // Only record an origin for units still parked in SillyTavern's own
+            // container; a unit already inside the grouped list has no home to
+            // restore to.
+            if (!unit.closest('#emm-groups') && !state.origin.has(unit)) {
+                state.origin.set(unit, { parent: unit.parentElement, next: unit.nextElementSibling });
+            }
         }
+        units.set(drawer, unit);
     }
     all.sort((a, b) => (state.baseOrder.get(a) ?? 0) - (state.baseOrder.get(b) ?? 0));
+
+    // A unit can only live in one place, so the first drawer of a unit decides
+    // the group it lands in; later drawers of the same unit follow it.
+    const claimed = new Set();
+    const collect = drawers => {
+        const out = [];
+        for (const drawer of drawers) {
+            const unit = units.get(drawer);
+            if (!unit || claimed.has(unit)) continue;
+            claimed.add(unit);
+            out.push(unit);
+        }
+        return out;
+    };
 
     const buckets = new Map(settings.groups.map(group => [group.id, []]));
     const ungrouped = [];
@@ -241,9 +307,16 @@ function renderGrouped() {
     // them when the container is rebuilt.
     const known = new Set(all);
     const orphans = [];
+    const seenOrphans = new Set();
     for (const drawer of wrap.querySelectorAll('.inline-drawer')) {
         if (drawer.parentElement?.closest('.inline-drawer')) continue;
-        if (!known.has(drawer)) orphans.push(drawer);
+        if (known.has(drawer)) continue;
+        const unit = placementUnit(drawer, wrap);
+        if (!unit || seenOrphans.has(unit)) continue;
+        // A stray nested drawer inside a unit we already move needs no rescue.
+        if ([...known].some(other => unit.contains(other))) continue;
+        seenOrphans.add(unit);
+        orphans.push(unit);
     }
     wrap.textContent = '';
 
@@ -259,30 +332,34 @@ function renderGrouped() {
             };
             return rank(a) - rank(b);
         });
-        wrap.append(buildGroupSection(group, members));
+        const placed = collect(members);
+        if (!placed.length) continue;
+        wrap.append(buildGroupSection(group, placed));
     }
 
-    if (ungrouped.length) {
+    const ungroupedUnits = collect(ungrouped);
+    if (ungroupedUnits.length) {
         const section = buildGroupSection(
             { id: UNGROUPED_ID, name: '未分组', collapsed: !!settings.ungroupedCollapsed },
-            ungrouped,
+            ungroupedUnits,
         );
         wrap.append(section);
     }
 
-    if (hidden.length) {
+    const hiddenUnits = collect(hidden);
+    if (hiddenUnits.length) {
         const stash = document.createElement('div');
         stash.id = 'emm-groups-hidden';
         stash.hidden = true;
-        stash.append(...hidden);
+        stash.append(...hiddenUnits);
         wrap.append(stash);
     }
 
-    const lost = [...state.origin.keys()].filter(drawer => !drawer.isConnected && !orphans.includes(drawer));
+    const lost = [...state.origin.keys()].filter(unit => !unit.isConnected && !orphans.includes(unit));
     if (orphans.length || lost.length) {
-        for (const drawer of [...orphans, ...lost]) {
-            if (!state.origin.has(drawer)) {
-                state.origin.set(drawer, { parent: null, next: null });
+        for (const unit of [...orphans, ...lost]) {
+            if (!state.origin.has(unit)) {
+                state.origin.set(unit, { parent: null, next: null });
             }
         }
         const stash = document.createElement('div');

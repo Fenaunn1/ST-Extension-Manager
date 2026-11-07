@@ -226,9 +226,21 @@
 /* ⋯ dropdown                                                          */
 /* ------------------------------------------------------------------ */
 
-#rm_extensions_block.emm-compact #extensions_details,
-#rm_extensions_block.emm-compact #third_party_extension_button {
+/* Manage and Install always live in the ⋯ menu, so the native buttons never
+   take up room in the title row. */
+#rm_extensions_block #extensions_details,
+#rm_extensions_block #third_party_extension_button {
     display: none !important;
+}
+
+/* Right-hand action cluster of the native title row: collapse, gear, kebab.
+   Pushed to the far right, after SillyTavern's own title and controls. */
+.emm-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+    margin-left: 8px;
 }
 
 /* Anchor for a dropdown that has to sit under its trigger. */

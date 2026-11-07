@@ -15,30 +15,11 @@ function normalizeTheme(value) {
 }
 
 function updateLayout() {
-    const rm = document.querySelector('#rm_extensions_block');
-    rm?.classList.toggle('emm-compact', !!settings.compactActions);
-
     if (ui.searchRow) ui.searchRow.hidden = !settings.showSearch;
 
     if (!settings.showSearch && state.filter) {
         state.filter = '';
         if (ui.search) ui.search.value = '';
-    }
-
-    if (ui.dropdown) {
-        const setHidden = (action, hidden) => {
-            const item = ui.dropdown.querySelector(`[data-action="${action}"]`);
-            if (item) item.hidden = hidden;
-        };
-        setHidden('manage', !settings.compactActions);
-        setHidden('install', !settings.compactActions);
-        setHidden('show-native', !settings.compactActions);
-        setHidden('hide-native', !!settings.compactActions);
-    }
-    if (ui.kebab) {
-        ui.kebab.hidden = !settings.compactActions;
-        ui.kebab.title = '扩展操作（管理 / 安装）';
-        if (!settings.compactActions && ui.dropdown) ui.dropdown.hidden = true;
     }
 
     if (ui.sticky) ui.sticky.classList.toggle('emm-bar-full', !!settings.barFullBleed);

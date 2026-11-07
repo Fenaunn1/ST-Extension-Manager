@@ -121,10 +121,14 @@
 /* Grouped extension list                                              */
 /* ------------------------------------------------------------------ */
 
+/* Same inner inset as the sticky bar (8px each side) so group headers and the
+   drawers under them line up with the title row and the tab strip. */
 #emm-groups {
     flex: 0 0 100%;
     width: 100%;
     min-width: 0;
+    box-sizing: border-box;
+    padding: 0 8px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -267,12 +271,19 @@
     flex: 1 1 auto;
 }
 
+/* The list under a group is a child of that group, so it starts where the
+   group name starts: the 20px inset clears the 12px caret plus its 6px gap
+   plus the head's own 2px padding. The same inset on the right keeps the two
+   sides equal, so the drawers sit in the middle of the group rather than
+   hanging off its left edge. */
 .emm-group-body {
     display: flex;
     align-items: flex-start;
     gap: 5px;
     width: 100%;
     min-width: 0;
+    box-sizing: border-box;
+    padding: 0 20px;
 }
 
 .emm-collapsed .emm-group-body {

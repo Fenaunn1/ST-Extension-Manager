@@ -11,9 +11,10 @@ import { saveSettingsDebounced } from '../../../../script.js';
 
 const MODULE_NAME = 'extension_manager';
 const LEGACY_MODULE_NAME = 'extension_manager_plus';
-const VERSION = '1.3.14';
+const VERSION = '1.4.0';
 const UNGROUPED_ID = '__ungrouped';
-const MODAL_CLOSE_MS = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 160;
+/** Fade-out length for modal layers; must match the transition in css/modal.css. */
+const MODAL_CLOSE_MS = 160;
 
 /** Group once the settings panel has been unchanged for this long. */
 const SETTLE_QUIET_MS = 800;
@@ -22,7 +23,6 @@ const SETTLE_QUIET_MS = 800;
 const SETTLE_MAX_MS = 12000;
 
 const DEFAULTS = {
-    compactActions: true, // fold Manage/Install into the ⋯ menu
     showSearch: true,
     hideBuiltins: false, // hide the built-in Assets drawer and the deprecated Extras API block
     theme: 'auto', // auto | day | night
@@ -36,7 +36,6 @@ const DEFAULTS = {
 
 /** Checkbox rows in the settings drawer, in display order: [element id, settings key]. */
 const OPTION_INPUTS = [
-    ['emm-opt-compact', 'compactActions'],
     ['emm-opt-search', 'showSearch'],
     ['emm-opt-hidebuiltins', 'hideBuiltins'],
     ['emm-opt-bleed', 'barFullBleed'],

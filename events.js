@@ -81,16 +81,6 @@ function bindUi() {
             document.querySelector('#extensions_details')?.click();
         } else if (action === 'install') {
             document.querySelector('#third_party_extension_button')?.click();
-        } else if (action === 'show-native') {
-            settings.compactActions = false;
-            saveSettings();
-            updateLayout();
-            refresh();
-        } else if (action === 'hide-native') {
-            settings.compactActions = true;
-            saveSettings();
-            updateLayout();
-            refresh();
         }
         if (ui.dropdown) ui.dropdown.hidden = true;
     });

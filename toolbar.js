@@ -51,54 +51,65 @@ function buildToolbar() {
             <button type="button" id="emm-tabs-right" class="emm-icon-btn emm-tab-arrow" title="向右滚动" hidden>
                 <i class="fa-solid fa-chevron-right"></i>
             </button>
-            <button type="button" id="emm-collapse-all" class="emm-icon-btn" title="折叠全部已展开的扩展">
-                <i class="fa-solid fa-compress"></i>
-            </button>
-            <div class="emm-gear-wrap">
-                <button type="button" id="emm-settings-btn" class="emm-icon-btn" title="扩展管理器菜单">
-                    <i class="fa-solid fa-gear"></i>
-                </button>
-                <div id="emm-gear-menu" class="emm-dropdown emm-gear-menu" hidden>
-                    <button type="button" class="emm-menu-item" data-action="settings">
-                        <i class="fa-solid fa-sliders"></i><span>设置界面</span>
-                    </button>
-                    <button type="button" class="emm-menu-item" data-action="manage-groups">
-                        <i class="fa-solid fa-pen-to-square"></i><span>管理分组</span>
-                    </button>
-                    <label class="emm-menu-item emm-menu-toggle" for="emm-grouping-toggle">
-                        <i class="fa-solid fa-layer-group"></i><span>启用分组</span>
-                        <input id="emm-grouping-toggle" type="checkbox" class="emm-toggle-input">
-                    </label>
-                </div>
-            </div>
         </div>
         <div id="emm-no-results" class="emm-no-results" hidden>没有匹配的扩展</div>
     `;
     sticky.appendChild(toolbar);
 
-    const menuWrap = document.createElement('div');
-    menuWrap.className = 'emm-menu-wrap';
-    menuWrap.innerHTML = `
-        <button type="button" id="emm-kebab" class="emm-icon-btn emm-kebab" title="扩展操作">
-            <i class="fa-solid fa-ellipsis"></i>
+    // Right-hand action cluster in the native title row: collapse, gear, kebab.
+    // SillyTavern's own controls stay in the row before it.
+    const headActions = document.createElement('div');
+    headActions.className = 'emm-head-actions';
+    headActions.innerHTML = `
+        <button type="button" id="emm-collapse-all" class="emm-icon-btn" title="折叠全部已展开的扩展">
+            <i class="fa-solid fa-compress"></i>
         </button>
-        <div id="emm-dropdown" class="emm-dropdown" hidden>
-            <button type="button" class="emm-menu-item" data-action="manage">
-                <i class="fa-solid fa-cubes"></i><span>管理扩展</span>
+        <div class="emm-gear-wrap">
+            <button type="button" id="emm-settings-btn" class="emm-icon-btn" title="扩展管理器菜单">
+                <i class="fa-solid fa-gear"></i>
             </button>
-            <button type="button" class="emm-menu-item" data-action="install">
-                <i class="fa-solid fa-cloud-arrow-down"></i><span>安装扩展</span>
+            <div id="emm-gear-menu" class="emm-dropdown emm-gear-menu" hidden>
+                <button type="button" class="emm-menu-item" data-action="settings">
+                    <i class="fa-solid fa-sliders"></i><span>设置界面</span>
+                </button>
+                <button type="button" class="emm-menu-item" data-action="manage-groups">
+                    <i class="fa-solid fa-pen-to-square"></i><span>管理分组</span>
+                </button>
+                <label class="emm-menu-item emm-menu-toggle" for="emm-grouping-toggle">
+                    <i class="fa-solid fa-layer-group"></i><span>启用分组</span>
+                    <input id="emm-grouping-toggle" type="checkbox" class="emm-toggle-input">
+                </label>
+            </div>
+        </div>
+        <div class="emm-menu-wrap">
+            <button type="button" id="emm-kebab" class="emm-icon-btn emm-kebab" title="扩展操作">
+                <i class="fa-solid fa-ellipsis"></i>
             </button>
-            <div class="emm-menu-sep"></div>
-            <button type="button" class="emm-menu-item" data-action="show-native">
-                <i class="fa-solid fa-table-columns"></i><span>显示顶部按钮</span>
-            </button>
-            <button type="button" class="emm-menu-item" data-action="hide-native">
-                <i class="fa-solid fa-compress"></i><span>收起顶部按钮</span>
-            </button>
+            <div id="emm-dropdown" class="emm-dropdown" hidden>
+                <button type="button" class="emm-menu-item" data-action="manage">
+                    <i class="fa-solid fa-cubes"></i><span>管理扩展</span>
+                </button>
+                <button type="button" class="emm-menu-item" data-action="install">
+                    <i class="fa-solid fa-cloud-arrow-down"></i><span>安装扩展</span>
+                </button>
+                <div class="emm-menu-sep"></div>
+                <label class="emm-menu-item emm-menu-toggle" for="extensions_notify_updates">
+                    <i class="fa-solid fa-bell"></i><span>扩展更新时通知</span>
+                </label>
+            </div>
         </div>
     `;
-    headerRow.appendChild(menuWrap);
+    headerRow.appendChild(headActions);
+
+    // SillyTavern binds its notification checkbox by id, so the original input
+    // moves into the menu instead of being cloned.
+    const notifyInput = document.getElementById('extensions_notify_updates');
+    if (notifyInput) {
+        notifyInput.closest('label')?.remove();
+        const toggle = headActions.querySelector('.emm-menu-toggle[for="extensions_notify_updates"]');
+        toggle?.appendChild(notifyInput);
+        notifyInput.classList.add('emm-toggle-input');
+    }
 
     ui.sticky = sticky;
     ui.toolbar = toolbar;
@@ -117,6 +128,7 @@ function buildToolbar() {
     ui.gearWrap = document.querySelector('.emm-gear-wrap');
     ui.groupingToggle = /** @type {HTMLInputElement} */ (document.getElementById('emm-grouping-toggle'));
     ui.noResults = document.getElementById('emm-no-results');
+    ui.headActions = headActions;
     ui.kebab = document.getElementById('emm-kebab');
     ui.dropdown = document.getElementById('emm-dropdown');
 
@@ -149,11 +161,6 @@ function appendSettingsDrawer() {
                 <input id="emm-opt-search" type="checkbox">
                 <i class="fa-solid fa-magnifying-glass emm-opt-icon" aria-hidden="true"></i>
                 <span>显示搜索框</span>
-            </label>
-            <label class="checkbox_label" for="emm-opt-compact" title="把管理扩展和安装扩展收进右上角 ⋯ 菜单">
-                <input id="emm-opt-compact" type="checkbox">
-                <i class="fa-solid fa-ellipsis emm-opt-icon" aria-hidden="true"></i>
-                <span>收纳顶部按钮</span>
             </label>
             <label class="checkbox_label" for="emm-opt-bleed" title="让顶栏背景铺满抽屉左右两侧">
                 <input id="emm-opt-bleed" type="checkbox">
